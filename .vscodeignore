@@ -10,3 +10,4 @@ dist/*.vsix
 images/mkv.png
 images/light.png
 images/webm.png
+.github/**

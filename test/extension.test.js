@@ -143,3 +143,30 @@ test('closing the editor stops a running helper', { skip: !hasFfmpeg() && 'ffmpe
   assert.ok(last.state === 'error' || last.state === 'ready');
   assert.deepStrictEqual(fs.readdirSync(path.join(tmp, 'cache')).filter((n) => n.includes('.part')), []);
 });
+
+// ---------- support links (Sponsor, More free viewers) ----------
+test('support: package.json has the sponsor field, the two commands and the setting', () => {
+  const pkg = require('../package.json');
+  const support = require('../src/support');
+  assert.strictEqual(pkg.sponsor.url, 'https://github.com/sponsors/theluckystrike');
+  assert.strictEqual(pkg.sponsor.url, support.sponsorUrl());
+  const ids = pkg.contributes.commands.map((c) => c.command);
+  assert.ok(ids.includes('videoPreview.supportDeveloper') && ids.includes('videoPreview.moreViewers'));
+  const props = Object.assign({}, ...[].concat(pkg.contributes.configuration).map((c) => c.properties));
+  assert.strictEqual(props['videoPreview.showSupportLinks'].default, true);
+  assert.ok(support.otherProducts('zovo.video-preview-with-sound').every((x) => x.id !== 'zovo.video-preview-with-sound'));
+});
+
+test('support: the footer shows by default and videoPreview.showSupportLinks=false hides it', async () => {
+  try {
+    for (const [value, shown] of [[undefined, true], [false, false]]) {
+      if (value === undefined) delete settings.showSupportLinks; else settings.showSupportLinks = value;
+      const v = open(fx('h264-mp3.mp4')); await v.done;
+      const html = v.panel.webview.html;
+      assert.strictEqual(/id="zovo-support"/.test(html), shown, String(value));
+      assert.strictEqual(html.includes('command:videoPreview.supportDeveloper'), shown);
+      assert.deepStrictEqual(v.panel.webview.options.enableCommandUris, ['videoPreview.supportDeveloper', 'videoPreview.moreViewers', 'workbench.action.openSettings']);
+      v.dispose();
+    }
+  } finally { delete settings.showSupportLinks; }
+});

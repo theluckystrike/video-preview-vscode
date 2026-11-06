@@ -8,6 +8,7 @@ const decoder = require('./core/decoder');
 const { parseFromWebview, pngFromDataUrl, toWebview } = require('./core/protocol');
 const { shotName } = require('./core/sync');
 const { createRatingPrompt } = require('./rate');
+const { registerSupport, commandUris, showLinks } = require('./support');
 
 let rating = { success() {} };
 
@@ -48,7 +49,8 @@ class Provider {
     const isLocal = uri.scheme === 'file';
     const roots = [vscode.Uri.joinPath(this.ctx.extensionUri, 'dist'), vscode.Uri.joinPath(this.ctx.extensionUri, 'media'), vscode.Uri.file(cacheDir)];
     roots.push(isLocal ? vscode.Uri.file(path.dirname(uri.fsPath)) : vscode.Uri.joinPath(uri, '..'));
-    panel.webview.options = { enableScripts: true, localResourceRoots: roots };
+    // Command links are limited to the two support commands and the settings page (footer "Hide" link).
+    panel.webview.options = { enableScripts: true, enableCommandUris: commandUris('videoPreview'), localResourceRoots: roots };
     const w = panel.webview;
     const name = path.basename(uri.path);
     w.html = buildHtml({
@@ -56,6 +58,7 @@ class Provider {
       scriptUri: w.asWebviewUri(vscode.Uri.joinPath(this.ctx.extensionUri, 'dist', 'webview.js')).toString(),
       styleUri: w.asWebviewUri(vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'player.css')).toString(),
       title: name,
+      showSupportLinks: showLinks(vscode, 'videoPreview'),
     });
 
     let job = null;
@@ -149,6 +152,7 @@ class Provider {
 }
 
 function activate(ctx) {
+  registerSupport({ vscode, context: ctx, prefix: 'videoPreview', selfId: 'zovo.video-preview-with-sound' });
   rating = createRatingPrompt({ vscode, context: ctx, extensionId: 'zovo.video-preview-with-sound', section: 'videoPreview', message: (n) => `Video Preview has opened ${n} files for you. A rating helps other people find it.` });
   const provider = new Provider(ctx);
   ctx.subscriptions.push(

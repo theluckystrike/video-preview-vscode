@@ -2,7 +2,7 @@
   "name": "video-preview-with-sound",
   "displayName": "Video Preview with Sound",
   "description": "Play MP4, MOV, MKV and WebM files in VS Code with their sound, which VS Code mutes on its own. Frame step, speed, A-B loop and PNG frame grabs.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "zovo",
   "license": "MIT",
   "icon": "icon.png",
@@ -102,6 +102,16 @@
         "command": "videoPreview.openWalkthrough",
         "title": "Get Started",
         "category": "Video Preview"
+      },
+      {
+        "command": "videoPreview.supportDeveloper",
+        "title": "Support the developer",
+        "category": "Video Preview"
+      },
+      {
+        "command": "videoPreview.moreViewers",
+        "title": "More free viewers",
+        "category": "Video Preview"
       }
     ],
     "menus": {
@@ -172,6 +182,11 @@
           "type": "boolean",
           "default": true,
           "description": "Ask one time for a Marketplace rating after you have used Video Preview for a few days. You can answer \"Later\" or \"Don't ask again\". Nothing is sent anywhere."
+        },
+        "videoPreview.showSupportLinks": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the small Sponsor and More free viewers links in a thin line under the player controls. The change shows in files you open next. Nothing is sent anywhere."
         }
       }
     },
@@ -233,5 +248,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/theluckystrike/video-preview-vscode"
+  },
+  "sponsor": {
+    "url": "https://github.com/sponsors/theluckystrike"
   }
 }
