@@ -2,7 +2,7 @@
   "name": "video-preview-with-sound",
   "displayName": "MP4 Video Player & Video Preview with Sound",
   "description": "Play MP4, MOV, MKV and WebM files in VS Code with their sound, which VS Code mutes on its own. Frame step, speed, A-B loop and PNG frame grabs.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "zovo",
   "license": "MIT",
   "icon": "icon.png",
