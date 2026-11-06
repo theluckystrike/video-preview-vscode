@@ -1,0 +1,232 @@
+{
+  "name": "video-preview-with-sound",
+  "displayName": "Video Preview with Sound",
+  "description": "Play MP4, MOV, MKV and WebM files in VS Code with their sound, which VS Code mutes on its own. Frame step, speed, A-B loop and PNG frame grabs.",
+  "version": "0.1.0",
+  "publisher": "zovo",
+  "license": "MIT",
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#14161F",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=18"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "video",
+    "video player",
+    "video preview",
+    "mp4",
+    "mov",
+    "m4v",
+    "webm",
+    "mkv",
+    "avi",
+    "h264",
+    "hevc",
+    "aac",
+    "audio",
+    "sound",
+    "player",
+    "preview",
+    "media",
+    "playback",
+    "frame",
+    "screenshot",
+    "playwright",
+    "screen recording",
+    "demo",
+    "clip",
+    "codec",
+    "ffmpeg",
+    "viewer",
+    "movie",
+    "speed",
+    "offline"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In an untrusted workspace the video plays, but ffmpeg or afconvert only runs after you click Turn on sound."
+    },
+    "virtualWorkspaces": {
+      "supported": "limited",
+      "description": "Remote and virtual files play without the sound helper."
+    }
+  },
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "videoPreview.player",
+        "displayName": "Video Preview with Sound",
+        "selector": [
+          {
+            "filenamePattern": "*.mp4"
+          },
+          {
+            "filenamePattern": "*.m4v"
+          },
+          {
+            "filenamePattern": "*.mov"
+          },
+          {
+            "filenamePattern": "*.webm"
+          },
+          {
+            "filenamePattern": "*.mkv"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "videoPreview.openWith",
+        "title": "Open with Video Preview",
+        "category": "Video Preview"
+      },
+      {
+        "command": "videoPreview.clearCache",
+        "title": "Clear Sound Cache",
+        "category": "Video Preview"
+      },
+      {
+        "command": "videoPreview.openWalkthrough",
+        "title": "Get Started",
+        "category": "Video Preview"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "videoPreview.openWith",
+          "when": "resourceExtname =~ /\\.(mp4|m4v|mov|webm|mkv)$/i",
+          "group": "navigation@9"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "videoPreview.openWith",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Video Preview with Sound",
+      "properties": {
+        "videoPreview.soundHelper": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ffmpeg",
+            "afconvert",
+            "off"
+          ],
+          "default": "auto",
+          "enumDescriptions": [
+            "Use ffmpeg if found, else afconvert on macOS",
+            "Use ffmpeg only",
+            "Use macOS afconvert first (built into macOS, cannot open MKV or WebM)",
+            "Never run a helper: the video plays without sound"
+          ],
+          "description": "Program that turns AAC, AC-3 and other sound VS Code cannot play into FLAC. Nothing is bundled; the extension runs your own copy."
+        },
+        "videoPreview.ffmpegPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Full path to ffmpeg. Leave empty to search PATH, /opt/homebrew/bin and /usr/local/bin."
+        },
+        "videoPreview.decodeSoundAutomatically": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the sound helper as soon as a file opens. Turn off to start it with a click. It never starts by itself in an untrusted workspace."
+        },
+        "videoPreview.maxDecodeSizeMB": {
+          "type": "number",
+          "default": 4096,
+          "minimum": 1,
+          "description": "Do not run the sound helper on files bigger than this. Bigger files still play, without sound."
+        },
+        "videoPreview.cacheSizeMB": {
+          "type": "number",
+          "default": 2048,
+          "minimum": 0,
+          "description": "Most disk space for decoded sound and remuxed files. The least recently used files go first."
+        },
+        "videoPreview.helperTimeoutSeconds": {
+          "type": "number",
+          "default": 900,
+          "minimum": 10,
+          "description": "Stop the helper if it runs longer than this."
+        }
+      }
+    },
+    "walkthroughs": [
+      {
+        "id": "videoPreview.start",
+        "title": "Get started with Video Preview with Sound",
+        "description": "Play videos with sound, step through frames and save a frame as PNG.",
+        "steps": [
+          {
+            "id": "open",
+            "title": "Open a video",
+            "description": "Click any .mp4, .mov, .m4v, .mkv or .webm file in the Explorer. It opens in Video Preview with Sound.\n[Find a video](command:workbench.action.quickOpen?%5B%22.mp4%22%5D)",
+            "media": {
+              "image": "images/player.png",
+              "altText": "An MP4 playing in Video Preview with Sound with the control bar and the metadata panel."
+            },
+            "completionEvents": [
+              "onCommand:workbench.action.quickOpen"
+            ]
+          },
+          {
+            "id": "sound",
+            "title": "Get the sound",
+            "description": "VS Code has no AAC decoder. On macOS the built-in afconvert decodes the sound; on Windows and Linux install ffmpeg. The status chip shows which one ran.\n[Open settings](command:workbench.action.openSettings?%5B%22videoPreview%22%5D)",
+            "media": {
+              "markdown": "walkthrough/sound.md"
+            },
+            "completionEvents": [
+              "onCommand:workbench.action.openSettings"
+            ]
+          },
+          {
+            "id": "keys",
+            "title": "Use the keys",
+            "description": "Space plays, comma and period step one frame, [ and ] change speed, A and B set a loop, S saves the frame as PNG, I shows the metadata.",
+            "media": {
+              "markdown": "walkthrough/keys.md"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node scripts/build.js --production",
+    "test": "node scripts/build.js --production && node --test test/*.test.js",
+    "samples": "node scripts/make-samples.js test/fixtures",
+    "package": "npm run build && npx -y @vscode/vsce package --no-dependencies -o dist/"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "mp4box": "2.5.0"
+  },
+  "homepage": "https://github.com/theluckystrike/video-preview-vscode#readme",
+  "bugs": {
+    "url": "https://github.com/theluckystrike/video-preview-vscode/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/theluckystrike/video-preview-vscode"
+  }
+}

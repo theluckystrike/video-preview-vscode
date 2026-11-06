@@ -1,0 +1,12 @@
+src/**
+test/**
+scripts/**
+node_modules/**
+**/*.map
+icon.svg
+.gitignore
+dist/*.vsix
+*.vsix
+images/mkv.png
+images/light.png
+images/webm.png
