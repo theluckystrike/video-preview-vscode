@@ -7,6 +7,9 @@ const media = require('./core/media');
 const decoder = require('./core/decoder');
 const { parseFromWebview, pngFromDataUrl, toWebview } = require('./core/protocol');
 const { shotName } = require('./core/sync');
+const { createRatingPrompt } = require('./rate');
+
+let rating = { success() {} };
 
 const VIEW_TYPE = 'videoPreview.player';
 
@@ -58,6 +61,7 @@ class Provider {
     let job = null;
     const post = (m) => { w.postMessage(m).then(undefined, () => {}); };
     const state = { meta: null, plan: null, stat: null };
+    let counted = false; // one success per opened tab, for the rating prompt
 
     const startSound = async (userAsked) => {
       if (!isLocal) { post(toWebview.sound('off', { text: 'Sound decoding needs a file on local disk.' })); return; }
@@ -111,6 +115,7 @@ class Provider {
           state.plan = media.plan(ext, state.meta);
           post(toWebview.init({ name, size: stat.size, meta: state.meta, plan: state.plan, probeMs,
             src: state.plan.mode === 'remux' ? null : w.asWebviewUri(uri).toString(), e2e: !!process.env.VIDEO_PREVIEW_E2E }));
+          if (state.plan.mode !== 'unsupported' && !counted) { counted = true; rating.success(); }
           if (state.plan.mode === 'native') post(toWebview.sound('native'));
           else if (state.plan.mode === 'video-only') post(toWebview.sound('none'));
           else if (state.plan.mode === 'unsupported') post(toWebview.sound('error', { text: state.plan.reason }));
@@ -144,6 +149,7 @@ class Provider {
 }
 
 function activate(ctx) {
+  rating = createRatingPrompt({ vscode, context: ctx, extensionId: 'zovo.video-preview-with-sound', section: 'videoPreview', message: (n) => `Video Preview has opened ${n} files for you. A rating helps other people find it.` });
   const provider = new Provider(ctx);
   ctx.subscriptions.push(
     vscode.window.registerCustomEditorProvider(VIEW_TYPE, provider, { webviewOptions: { retainContextWhenHidden: false }, supportsMultipleEditorsPerDocument: true }),

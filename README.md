@@ -65,6 +65,7 @@ The metadata panel shows container brands, duration, codec, frame size, frame ra
 | `videoPreview.maxDecodeSizeMB` | 4096 | Bigger files still play, without sound, and the chip says why |
 | `videoPreview.cacheSizeMB` | 2048 | Disk space for decoded sound and remuxed files |
 | `videoPreview.helperTimeoutSeconds` | 900 | The helper is stopped after this long |
+| `videoPreview.askForRating` | true | Ask one time for a Marketplace rating, after 5 files and 2 days. Turn it off with `false` |
 
 ## Privacy and safety
 
