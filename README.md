@@ -1,9 +1,9 @@
-# Video Preview with Sound
+# MP4 Video Player & Video Preview with Sound
 
 [![VS Code Marketplace installs](https://img.shields.io/visual-studio-marketplace/i/zovo.video-preview-with-sound?label=VS%20Code%20installs)](https://marketplace.visualstudio.com/items?itemName=zovo.video-preview-with-sound)
 [![Open VSX version](https://img.shields.io/open-vsx/v/zovo/video-preview-with-sound?label=Open%20VSX)](https://open-vsx.org/extension/zovo/video-preview-with-sound)
 
-Click an `.mp4`, `.mov`, `.mkv` or `.webm` file and it plays inside VS Code with its sound, which VS Code's own player leaves out for AAC audio.
+Click an `.mp4`, `.mov`, `.mkv` or `.webm` file and it plays in a video player inside VS Code with its sound, which VS Code's own player leaves out for AAC audio.
 
 ![An H.264 and AAC MP4 paused in Video Preview with Sound. The control bar shows frame 137 at 0:04.577, an A-B loop from 3.3 s to 6.0 s marked on the seek bar, and the chip "Sound: on (afconvert, 0.1 s)". The metadata panel lists H.264 1280 x 720 at 30 fps, 180 frames, AAC 48000 Hz stereo at 96 kb/s](https://github.com/theluckystrike/video-preview-vscode/raw/HEAD/images/player.png)
 

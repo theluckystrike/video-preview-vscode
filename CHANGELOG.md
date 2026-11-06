@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3 (2026-11-07)
+
+- The Marketplace name is now "MP4 Video Player & Video Preview with Sound", so a search for video player or MP4 finds it. The extension ID, settings and commands stay the same.
+
 ## 0.1.2 (2026-11-06)
 
 - A thin line under the player controls has two links, "Sponsor" (GitHub Sponsors) and "More free viewers". The new setting `videoPreview.showSupportLinks` (default `true`) hides it, and so does the "Hide" link next to them. There is no popup, and nothing is sent anywhere.
