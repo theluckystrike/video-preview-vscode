@@ -82,6 +82,27 @@
           },
           {
             "filenamePattern": "*.mkv"
+          },
+          {
+            "filenamePattern": "*.avi"
+          },
+          {
+            "filenamePattern": "*.wmv"
+          },
+          {
+            "filenamePattern": "*.flv"
+          },
+          {
+            "filenamePattern": "*.mpg"
+          },
+          {
+            "filenamePattern": "*.mpeg"
+          },
+          {
+            "filenamePattern": "*.ogv"
+          },
+          {
+            "filenamePattern": "*.m2ts"
           }
         ],
         "priority": "default"
@@ -118,7 +139,7 @@
       "explorer/context": [
         {
           "command": "videoPreview.openWith",
-          "when": "resourceExtname =~ /\\.(mp4|m4v|mov|webm|mkv)$/i",
+          "when": "resourceExtname =~ /\\.(mp4|m4v|mov|webm|mkv|avi|wmv|flv|mpg|mpeg|ogv|m2ts)$/i",
           "group": "navigation@9"
         }
       ],
@@ -177,6 +198,26 @@
           "default": 900,
           "minimum": 10,
           "description": "Stop the helper if it runs longer than this."
+        },
+        "videoPreview.convertUnsupportedVideo": {
+          "type": "boolean",
+          "default": true,
+          "description": "Convert videos VS Code cannot decode (Apple ProRes, MPEG-4 Part 2, AVI, WMV, MPEG and others) to H.264 with your own ffmpeg as soon as they open. Turn off to convert with a click. It never starts by itself in an untrusted workspace. The copy is kept in the cache (videoPreview.cacheSizeMB)."
+        },
+        "videoPreview.subtitles.autoLoad": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the first subtitle file found next to the video (movie.srt, movie.vtt, movie.en.srt ...) as soon as it opens. Off: the tracks are listed under CC but stay hidden until you pick one or press C."
+        },
+        "videoPreview.rememberPosition": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start each video where you stopped it last time (with its speed), and keep the last volume and mute. Positions of the 200 most recent files are kept on this computer only."
+        },
+        "videoPreview.autoplay": {
+          "type": "boolean",
+          "default": false,
+          "description": "Start playing as soon as a video opens. If VS Code blocks it, the video waits for Play."
         },
         "videoPreview.askForRating": {
           "type": "boolean",

@@ -21,6 +21,18 @@ test('rejects bad messages', () => {
   }
 });
 
+test('new messages: convert, open in default app, load subtitles, playFailed, remember', () => {
+  for (const type of ['convertVideo', 'openExternal', 'loadSubtitles']) assert.deepStrictEqual(parseFromWebview({ type, path: '/etc/passwd' }), { type });
+  assert.deepStrictEqual(parseFromWebview({ type: 'playFailed', code: 4, noPicture: false, src: 'x' }), { type: 'playFailed', code: 4, noPicture: false });
+  assert.deepStrictEqual(parseFromWebview({ type: 'playFailed', code: 'rm -rf', noPicture: 'yes' }), { type: 'playFailed', code: 0, noPicture: false });
+  assert.deepStrictEqual(parseFromWebview({ type: 'playFailed', code: 99, noPicture: true }), { type: 'playFailed', code: 0, noPicture: true });
+  assert.deepStrictEqual(parseFromWebview({ type: 'remember', t: 83.5, rate: 1.5, volume: 0.4, muted: true, file: '/x' }), { type: 'remember', t: 83.5, rate: 1.5, volume: 0.4, muted: true });
+  assert.deepStrictEqual(parseFromWebview({ type: 'remember', t: 1, rate: 100, volume: 7, muted: 'yes' }), { type: 'remember', t: 1, rate: 1, volume: null, muted: false });
+  for (const t of [-1, 'a', NaN, Infinity, 1e8, undefined]) assert.strictEqual(parseFromWebview({ type: 'remember', t }), null, String(t));
+  assert.deepStrictEqual(toWebview.subtitles([{ label: 'en', lang: 'en', cues: [] }], { auto: true }), { type: 'subtitles', tracks: [{ label: 'en', lang: 'en', cues: [] }], auto: true });
+  assert.strictEqual(toWebview.plan({ mode: 'transcode' }).type, 'plan');
+});
+
 test('pngFromDataUrl checks the PNG signature', () => {
   assert.ok(pngFromDataUrl(PNG));
   assert.strictEqual(pngFromDataUrl('data:image/png;base64,' + Buffer.from('GIF89a....').toString('base64')), null);

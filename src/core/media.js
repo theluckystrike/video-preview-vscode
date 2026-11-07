@@ -4,6 +4,10 @@ const MP4Box = require('mp4box');
 
 const MP4_EXT = new Set(['.mp4', '.m4v', '.mov', '.3gp', '.3g2']);
 const REMUX_EXT = new Set(['.mkv', '.webm']);
+// Containers VS Code never opens: ffmpeg converts them to H.264 MP4. Never .ts or .mts: those are TypeScript.
+const TRANSCODE_EXT = new Set(['.avi', '.mpg', '.mpeg', '.wmv', '.flv', '.ogv', '.m2ts']);
+// Sample entries that are video even when mp4box does not know them (it reports ProRes as 'metadata').
+const VIDEO_4CC = /^(avc[1-4]|hvc1|hev1|dvh[1e]|dva[1v]|vp0[89]|av01|apc[nhso]|ap4[hx]|aprh|aprn|mp4v|mjp[ab]|jpeg|h263|s263|svq[13]|cvid|dv(c |cp|5n|5p|h[1-6p])|r210|v210|2vuy|yuv2|avdn|avdh|ai[5p]|xd5|xdv)/i;
 
 /** Audio codecs that VS Code's own Chromium can play inside MP4 (tested on VS Code 1.142, Electron 43). */
 function nativeAudio(codec) {
@@ -47,9 +51,9 @@ function summarize(info, size) {
   const tracks = (info.tracks || []).map((t) => {
     const seconds = t.timescale ? t.duration / t.timescale : 0;
     const base = { id: t.id, type: t.type, codec: t.codec, language: t.language && t.language !== 'und' ? t.language : '', seconds: round(seconds, 3), bitrate: Math.round(t.bitrate || 0), samples: t.nb_samples };
-    if (t.type === 'video' || t.video) {
+    if (t.type === 'video' || t.video || VIDEO_4CC.test(String(t.codec || ''))) {
       const fps = seconds > 0 ? t.nb_samples / seconds : 0;
-      return { ...base, type: 'video', width: t.video ? t.video.width : t.track_width, height: t.video ? t.video.height : t.track_height, fps: round(fps, 3) };
+      return { ...base, type: 'video', width: t.video ? t.video.width : Math.round(t.track_width || 0), height: t.video ? t.video.height : Math.round(t.track_height || 0), fps: round(fps, 3) };
     }
     if (t.type === 'audio' || t.audio) return { ...base, type: 'audio', sampleRate: t.audio ? t.audio.sample_rate : 0, channels: t.audio ? t.audio.channel_count : 0 };
     return base;
@@ -63,20 +67,38 @@ function round(n, d) { const f = 10 ** d; return Math.round(n * f) / f; }
 /**
  * Decide how to play a file.
  * mode: 'native' (VS Code plays video and sound), 'decode-audio' (video plays, sound needs a helper),
- * 'remux' (container VS Code cannot open: needs ffmpeg), 'video-only' (no audio track), 'unsupported'.
+ * 'remux' (container VS Code cannot open: needs ffmpeg), 'transcode' (video codec or container VS Code
+ * cannot decode: ffmpeg converts the video to H.264), 'video-only' (no audio track), 'unsupported'.
  */
 function plan(ext, meta) {
   ext = String(ext || '').toLowerCase();
   if (REMUX_EXT.has(ext)) return { mode: 'remux', reason: 'VS Code cannot open ' + ext + ' files by itself. ffmpeg copies the video into MP4 and turns the sound into FLAC.' };
+  if (TRANSCODE_EXT.has(ext)) return { mode: 'transcode', reason: 'VS Code cannot open ' + ext + ' files by itself, so ffmpeg converts the video to H.264 for playback.', what: ext + ' files' };
   if (!meta || !meta.ok) return { mode: 'decode-audio', reason: 'Metadata unreadable; trying the helper for sound.', unknown: true };
   const v = meta.tracks.find((t) => t.type === 'video');
   const a = meta.tracks.find((t) => t.type === 'audio');
-  if (v && !nativeVideo(v.codec)) return { mode: 'unsupported', reason: 'VS Code has no decoder for the ' + v.codec + ' video codec.' };
+  if (v && !nativeVideo(v.codec)) return transcodePlan(v.codec);
   if (!a) return { mode: 'video-only', reason: 'This file has no audio track.' };
   if (nativeAudio(a.codec)) return { mode: 'native', reason: a.codec + ' sound plays in VS Code directly.' };
   return { mode: 'decode-audio', reason: 'VS Code ships without an ' + codecName(a.codec) + ' decoder, so the sound is decoded to FLAC by a helper.', audioCodec: a.codec };
 }
 
+/** Plan for a video codec VS Code has no decoder for. `runtime` = the player tried and failed. */
+function transcodePlan(codec, runtime = false) {
+  const name = codecName(codec);
+  const reason = runtime
+    ? 'VS Code could not decode the ' + name + ' video on this computer, so ffmpeg converts it to H.264 for playback.'
+    : 'VS Code has no decoder for ' + name + ' video, so ffmpeg converts it to H.264 for playback.';
+  return { mode: 'transcode', reason, videoCodec: codec || '', what: name, runtime };
+}
+
+/** Plan after the player failed to show the video. null = no second try (already converted, or no video). */
+function fallbackPlan(current, meta) {
+  if (!current || current.mode === 'transcode' || current.mode === 'unsupported') return null;
+  const v = meta && meta.ok ? meta.tracks.find((t) => t.type === 'video') : null;
+  return transcodePlan(v ? v.codec : '', true);
+}
+
 const { codecName } = require('./media-names');
 
-module.exports = { probeMp4, summarize, plan, nativeAudio, nativeVideo, codecName, MP4_EXT, REMUX_EXT };
+module.exports = { probeMp4, summarize, plan, transcodePlan, fallbackPlan, nativeAudio, nativeVideo, codecName, MP4_EXT, REMUX_EXT, TRANSCODE_EXT, VIDEO_4CC };

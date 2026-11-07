@@ -7,6 +7,8 @@ const media = require('./core/media');
 const decoder = require('./core/decoder');
 const { parseFromWebview, pngFromDataUrl, toWebview } = require('./core/protocol');
 const { shotName } = require('./core/sync');
+const { findSidecars, loadTrack } = require('./core/sidecars');
+const { createStore, resumeAt } = require('./core/resume');
 const { createRatingPrompt } = require('./rate');
 const { registerSupport, commandUris, showLinks } = require('./support');
 
@@ -23,6 +25,10 @@ function cfg() {
     cacheMB: c.get('cacheSizeMB', 2048),
     timeoutSec: c.get('helperTimeoutSeconds', 900),
     autoSound: c.get('decodeSoundAutomatically', true),
+    convert: c.get('convertUnsupportedVideo', true),
+    autoSubs: c.get('subtitles.autoLoad', true),
+    remember: c.get('rememberPosition', true),
+    autoplay: c.get('autoplay', false),
   };
 }
 
@@ -38,8 +44,11 @@ async function probeFile(file, size) {
   try { return await media.probeMp4(readRange(fd.fd), size); } finally { await fd.close(); }
 }
 
+/** In-memory stand-in when the context has no globalState (tests). */
+function memoryMemento() { const m = new Map(); return { get: (k, d) => (m.has(k) ? m.get(k) : d), update: async (k, v) => { m.set(k, v); } }; }
+
 class Provider {
-  constructor(ctx) { this.ctx = ctx; this.jobs = new Map(); }
+  constructor(ctx) { this.ctx = ctx; this.jobs = new Map(); this.store = createStore(ctx.globalState || memoryMemento()); }
 
   openCustomDocument(uri) { return { uri, dispose: () => {} }; }
 
@@ -66,41 +75,63 @@ class Provider {
     const state = { meta: null, plan: null, stat: null };
     let counted = false; // one success per opened tab, for the rating prompt
 
+    let gen = 0; // bumped when a newer job replaces the running one, so the old result is dropped quietly
     const startSound = async (userAsked) => {
-      if (!isLocal) { post(toWebview.sound('off', { text: 'Sound decoding needs a file on local disk.' })); return; }
-      const c = cfg();
+      const my = ++gen;
       const p = state.plan;
-      const needFfmpeg = p.mode === 'remux';
-      if (!vscode.workspace.isTrusted && !userAsked) { post(toWebview.sound('needs-trust', { text: 'This workspace is not trusted, so no helper runs by itself.' })); return; }
-      if (!c.autoSound && !userAsked) { post(toWebview.sound('needs-trust', { text: 'Automatic sound decoding is off.' })); return; }
+      const mode = p.mode;
+      const tc = mode === 'transcode';
+      if (!isLocal) { post(toWebview.sound('off', { mode, text: tc ? 'Converting the video needs a file on local disk.' : 'Sound decoding needs a file on local disk.' })); return; }
+      const c = cfg();
+      const needFfmpeg = mode === 'remux' || tc;
+      const cannotPlay = p.videoCodec ? 'This video uses ' + media.codecName(p.videoCodec) + ', which VS Code cannot play.' : 'VS Code cannot play ' + path.extname(name).toLowerCase() + ' files.';
+      if (!vscode.workspace.isTrusted && !userAsked) {
+        post(toWebview.sound('needs-trust', { mode, text: tc ? cannotPlay + ' This workspace is not trusted, so ffmpeg does not start by itself.' : 'This workspace is not trusted, so no helper runs by itself.' }));
+        return;
+      }
+      if (!userAsked && (tc ? !c.convert : !c.autoSound)) {
+        post(toWebview.sound('needs-trust', { mode, text: tc ? cannotPlay + ' Automatic conversion is off (videoPreview.convertUnsupportedVideo).' : 'Automatic sound decoding is off.' }));
+        return;
+      }
       if (state.stat.size > c.maxDecodeMB * 1048576) {
-        post(toWebview.sound('too-big', { text: `This file is ${(state.stat.size / 1048576).toFixed(0)} MB. Sound decoding stops at ${c.maxDecodeMB} MB (setting videoPreview.maxDecodeSizeMB).` }));
+        post(toWebview.sound('too-big', { mode, text: `This file is ${(state.stat.size / 1048576).toFixed(0)} MB. ${tc ? 'Conversion' : 'Sound decoding'} stops at ${c.maxDecodeMB} MB (setting videoPreview.maxDecodeSizeMB).` }));
         return;
       }
       const helper = decoder.findHelper({ setting: c.ffmpegPath, preferred: c.helper, needFfmpeg });
       if (!helper) {
-        post(toWebview.sound('needs-helper', { mode: p.mode, text: needFfmpeg ? 'Install ffmpeg to open this file. VS Code cannot read ' + path.extname(name) + ' by itself.' : 'Install ffmpeg to hear this file. VS Code has no ' + media.codecName(p.audioCodec) + ' decoder.' }));
+        let text;
+        if (tc) text = cannotPlay + ' Install ffmpeg to convert it for playback.';
+        else if (mode === 'remux') text = 'Install ffmpeg to open this file. VS Code cannot read ' + path.extname(name) + ' by itself.';
+        else text = 'Install ffmpeg to hear this file. VS Code has no ' + media.codecName(p.audioCodec) + ' decoder.';
+        post(toWebview.sound('needs-helper', { mode, text }));
         return;
       }
       fs.mkdirSync(cacheDir, { recursive: true });
-      const key = decoder.cacheKey(uri.fsPath, state.stat, helper.tool, p.mode);
-      const out = path.join(cacheDir, key + (p.mode === 'remux' ? '.mp4' : '.flac'));
-      const done = (file, ms, cached) => {
+      const key = decoder.cacheKey(uri.fsPath, state.stat, helper.tool, mode);
+      const isVideo = mode === 'remux' || tc;
+      const out = path.join(cacheDir, key + (isVideo ? '.mp4' : '.flac'));
+      const done = (file, ms, cached, encoder) => {
         try { const now = new Date(); fs.utimesSync(file, now, now); } catch { /* ignore */ }
         const src = w.asWebviewUri(vscode.Uri.file(file)).toString();
-        if (p.mode === 'remux') post(toWebview.media(src));
-        post(toWebview.sound('ready', { src: p.mode === 'remux' ? null : src, tool: helper.tool, ms, cached, mode: p.mode }));
+        if (tc) state.converted = true;
+        if (isVideo) post(toWebview.media(src));
+        post(toWebview.sound('ready', { src: isVideo ? null : src, tool: helper.tool, ms, cached, mode, encoder }));
       };
       if (fs.existsSync(out)) { done(out, 0, true); return; }
-      post(toWebview.sound('decoding', { tool: helper.tool, progress: null, mode: p.mode }));
+      post(toWebview.sound('decoding', { tool: helper.tool, progress: null, mode }));
       const duration = state.meta && state.meta.ok ? state.meta.duration : 0;
-      job = decoder.run({ helper, input: uri.fsPath, output: out, mode: p.mode, duration, timeoutMs: c.timeoutSec * 1000,
-        onProgress: (f) => post(toWebview.sound('decoding', { tool: helper.tool, progress: f, mode: p.mode })) });
-      const r = await job.promise;
-      job = null;
-      if (r.ok) { done(out, r.ms, false); decoder.pruneCache(cacheDir, c.cacheMB * 1048576, new Set([out])); }
-      else post(toWebview.sound('error', { tool: helper.tool, mode: p.mode, text: helper.tool + ' could not read this file: ' + r.error }));
+      const thisJob = decoder.run({ helper, input: uri.fsPath, output: out, mode, duration, timeoutMs: c.timeoutSec * 1000,
+        onProgress: (f) => { if (my === gen) post(toWebview.sound('decoding', { tool: helper.tool, progress: f, mode })); } });
+      job = thisJob;
+      const r = await thisJob.promise;
+      if (job === thisJob) job = null;
+      if (my !== gen) return;
+      if (r.ok) { done(out, r.ms, false, r.encoder); decoder.pruneCache(cacheDir, c.cacheMB * 1048576, new Set([out])); }
+      else post(toWebview.sound('error', { tool: helper.tool, mode, text: helper.tool + (tc ? ' could not convert this video: ' : ' could not read this file: ') + r.error }));
     };
+
+    const posKey = isLocal ? uri.fsPath : uri.toString();
+    const e2e = !!process.env.VIDEO_PREVIEW_E2E;
 
     panel.onDidDispose(() => { if (job) job.cancel(); });
 
@@ -113,11 +144,22 @@ class Provider {
           state.stat = stat;
           const ext = path.extname(name).toLowerCase();
           const t0 = Date.now();
-          state.meta = isLocal && !media.REMUX_EXT.has(ext) ? await probeFile(uri.fsPath, stat.size).catch((e) => ({ ok: false, error: String(e.message || e) })) : null;
+          state.meta = isLocal && !media.REMUX_EXT.has(ext) && !media.TRANSCODE_EXT.has(ext) ? await probeFile(uri.fsPath, stat.size).catch((e) => ({ ok: false, error: String(e.message || e) })) : null;
           const probeMs = Date.now() - t0;
           state.plan = media.plan(ext, state.meta);
-          post(toWebview.init({ name, size: stat.size, meta: state.meta, plan: state.plan, probeMs,
-            src: state.plan.mode === 'remux' ? null : w.asWebviewUri(uri).toString(), e2e: !!process.env.VIDEO_PREVIEW_E2E }));
+          const c = cfg();
+          // Resume (position, speed, volume) and autoplay never apply in the e2e run, so it always starts at 0 and paused.
+          let resume = null;
+          if (c.remember && !e2e) {
+            const pos = this.store.get(posKey); const vol = this.store.getVolume();
+            if (pos || vol) resume = { t: pos ? pos.t : 0, rate: pos ? pos.rate : 1, volume: vol ? vol.volume : null, muted: vol ? vol.muted : false };
+          }
+          const videoSrc = state.plan.mode === 'remux' || state.plan.mode === 'transcode' ? null : w.asWebviewUri(uri).toString();
+          post(toWebview.init({ name, size: stat.size, meta: state.meta, plan: state.plan, probeMs, src: videoSrc, e2e, resume, autoplay: !!c.autoplay && !e2e }));
+          if (isLocal) {
+            const tracks = await findSidecars(uri.fsPath);
+            if (tracks.length) post(toWebview.subtitles(tracks, { auto: !!c.autoSubs }));
+          }
           if (state.plan.mode !== 'unsupported' && !counted) { counted = true; rating.success(); }
           if (state.plan.mode === 'native') post(toWebview.sound('native'));
           else if (state.plan.mode === 'video-only') post(toWebview.sound('none'));
@@ -126,8 +168,40 @@ class Provider {
         } catch (e) {
           post(toWebview.sound('error', { text: 'Could not open the file: ' + (e.message || e) }));
         }
-      } else if (m.type === 'enableSound' || m.type === 'retrySound') {
+      } else if (m.type === 'enableSound' || m.type === 'retrySound' || m.type === 'convertVideo') {
         if (state.plan) await startSound(true);
+      } else if (m.type === 'playFailed') {
+        // The player could not show the video (no decoder on this GPU, odd codec): convert once per tab.
+        if (!state.plan) return;
+        if (state.plan.mode === 'transcode') {
+          if (state.converted) post(toWebview.sound('error', { mode: 'transcode', final: true, text: 'VS Code could not play this video, even after converting it to H.264.' }));
+          return;
+        }
+        const next = media.fallbackPlan(state.plan, state.meta);
+        if (!next) return;
+        if (job) job.cancel();
+        state.plan = next;
+        post(toWebview.plan(next));
+        await startSound(false);
+      } else if (m.type === 'openExternal') {
+        if (!isLocal) { post(toWebview.toast('Only files on this computer can open in another app.')); return; }
+        try {
+          const ok = await vscode.env.openExternal(uri);
+          if (!ok) post(toWebview.toast('No default app opened this file.'));
+        } catch (e) { post(toWebview.toast('Could not open the file: ' + (e.message || e))); }
+      } else if (m.type === 'loadSubtitles') {
+        const picked = await vscode.window.showOpenDialog({ canSelectMany: false, openLabel: 'Load subtitles',
+          defaultUri: isLocal ? vscode.Uri.file(path.dirname(uri.fsPath)) : undefined, filters: { Subtitles: ['srt', 'vtt'] } });
+        const f = picked && picked[0];
+        if (!f) return;
+        if (f.scheme !== 'file') { post(toWebview.toast('Pick a subtitle file on local disk.')); return; }
+        const t = await loadTrack(f.fsPath, null);
+        if (t.error) post(toWebview.toast(t.error));
+        else post(toWebview.subtitles([t], { add: true, auto: true }));
+      } else if (m.type === 'remember') {
+        if (!cfg().remember || e2e) return;
+        await this.store.set(posKey, { t: m.t, rate: m.rate });
+        if (m.volume != null) await this.store.setVolume(m.volume, m.muted);
       } else if (m.type === 'openSettings') {
         vscode.commands.executeCommand('workbench.action.openSettings', 'videoPreview');
       } else if (m.type === 'copyText') {
@@ -164,7 +238,7 @@ function activate(ctx) {
     vscode.commands.registerCommand('videoPreview.clearCache', async () => {
       const dir = path.join(ctx.globalStorageUri.fsPath, 'cache');
       const removed = decoder.pruneCache(dir, 0);
-      vscode.window.showInformationMessage(`Video Preview: removed ${removed.length} cached sound file(s).`);
+      vscode.window.showInformationMessage(`Video Preview: removed ${removed.length} cached sound and video file(s).`);
     }),
     vscode.commands.registerCommand('videoPreview.openWalkthrough', () =>
       vscode.commands.executeCommand('workbench.action.openWalkthrough', 'zovo.video-preview-with-sound#videoPreview.start', false)),
