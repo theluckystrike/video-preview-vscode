@@ -326,3 +326,20 @@ test('support: the footer shows by default and videoPreview.showSupportLinks=fal
     }
   } finally { delete settings.showSupportLinks; }
 });
+
+test('empty file: a clear final message, ffmpeg never starts', async () => {
+  const f = path.join(tmp, 'empty.mp4'); fs.writeFileSync(f, '');
+  const v = open(f); await v.done; await v.send({ type: 'ready' });
+  const m = await waitFor(() => v.sent.find((x) => x.type === 'sound' && x.state === 'error'));
+  assert.strictEqual(m.text, 'This file is empty (0 bytes), so there is no video to play.');
+  assert.strictEqual(m.final, true);
+  assert.ok(!v.sent.some((x) => x.state === 'decoding'));
+});
+
+test('not a video: the message says so instead of the raw ffmpeg output', { skip: !hasFfmpeg() && 'ffmpeg not on PATH' }, async () => {
+  const v = open(fx('not-a-video.mp4')); await v.done; await v.send({ type: 'ready' });
+  const m = await waitFor(() => v.sent.find((x) => x.type === 'sound' && x.state === 'error'));
+  assert.match(m.text, /^This file does not look like a video\. VS Code cannot play it and ffmpeg cannot read it\./);
+  assert.ok(!/\[in#0|Error opening input|\//.test(m.text), m.text);
+  assert.strictEqual(m.final, true);
+});

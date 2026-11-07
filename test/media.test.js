@@ -105,3 +105,12 @@ test('codec names for ProRes, MPEG-4 Part 2 and friends', () => {
   assert.strictEqual(codecName('mp4v.6a'), 'MPEG-1');
   assert.strictEqual(codecName('mjpa'), 'Motion JPEG');
 });
+
+test('not-media ffmpeg errors and their message', () => {
+  const { isNotMediaError, notVideoText } = require('../src/core/media');
+  assert.ok(isNotMediaError('[in#0 @ 0x1] Error opening input: Invalid data found when processing input'));
+  assert.ok(isNotMediaError('moov atom not found'));
+  assert.ok(!isNotMediaError('Unknown encoder libx264'));
+  assert.strictEqual(notVideoText(0), 'This file is empty (0 bytes), so there is no video to play.');
+  assert.match(notVideoText(63, 'ffmpeg'), /ffmpeg cannot read it/);
+});

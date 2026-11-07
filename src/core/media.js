@@ -101,4 +101,15 @@ function fallbackPlan(current, meta) {
 
 const { codecName } = require('./media-names');
 
-module.exports = { probeMp4, summarize, plan, transcodePlan, fallbackPlan, nativeAudio, nativeVideo, codecName, MP4_EXT, REMUX_EXT, TRANSCODE_EXT, VIDEO_4CC };
+/** ffmpeg errors that mean the input is not media at all (not a codec problem). */
+function isNotMediaError(text) {
+  return /Invalid data found when processing input|moov atom not found|could not find codec parameters|Error opening input/i.test(String(text || ''));
+}
+
+/** The message for a file that is empty or holds no video, in place of the raw ffmpeg output. */
+function notVideoText(size, tool) {
+  if (size === 0) return 'This file is empty (0 bytes), so there is no video to play.';
+  return 'This file does not look like a video. VS Code cannot play it' + (tool ? ' and ' + tool + ' cannot read it' : '') + '. It may be damaged, still downloading, or another kind of file with a video extension.';
+}
+
+module.exports = { isNotMediaError, notVideoText, probeMp4, summarize, plan, transcodePlan, fallbackPlan, nativeAudio, nativeVideo, codecName, MP4_EXT, REMUX_EXT, TRANSCODE_EXT, VIDEO_4CC };

@@ -82,6 +82,7 @@ class Provider {
       const mode = p.mode;
       const tc = mode === 'transcode';
       if (!isLocal) { post(toWebview.sound('off', { mode, text: tc ? 'Converting the video needs a file on local disk.' : 'Sound decoding needs a file on local disk.' })); return; }
+      if (state.stat && state.stat.size === 0) { post(toWebview.sound('error', { mode, final: true, text: media.notVideoText(0) })); return; }
       const c = cfg();
       const needFfmpeg = mode === 'remux' || tc;
       const cannotPlay = p.videoCodec ? 'This video uses ' + media.codecName(p.videoCodec) + ', which VS Code cannot play.' : 'VS Code cannot play ' + path.extname(name).toLowerCase() + ' files.';
@@ -128,6 +129,7 @@ class Provider {
       if (job === thisJob) job = null;
       if (my !== gen) return;
       if (r.ok) { done(out, r.ms, false, r.encoder); decoder.pruneCache(cacheDir, c.cacheMB * 1048576, new Set([out])); }
+      else if (media.isNotMediaError(r.error) && !(state.meta && state.meta.ok)) post(toWebview.sound('error', { tool: helper.tool, mode, final: true, text: media.notVideoText(state.stat ? state.stat.size : null, helper.tool) }));
       else post(toWebview.sound('error', { tool: helper.tool, mode, text: helper.tool + (tc ? ' could not convert this video: ' : ' could not read this file: ') + r.error }));
     };
 

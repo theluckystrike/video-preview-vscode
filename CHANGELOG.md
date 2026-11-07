@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 (2026-11-07)
+
+- An empty file (0 bytes) or a file that is not a video now gets a short, clear message. Before, the player showed ffmpeg's raw error output and a Retry button that could not help.
+
 ## 0.2.0 (2026-11-07)
 
 - New name in the Marketplace: MP4 Viewer & Video Player with Sound. The extension ID, settings and commands stay the same.
