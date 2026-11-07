@@ -164,7 +164,7 @@ test('ProRes MOV: plan transcode, no direct source, converted H.264 MP4 sent as 
 });
 
 test('AVI: no ffmpeg gives a stage message with the next step, never a blank page', async () => {
-  settings.soundHelper = 'off';
+  settings.soundHelper = 'ffmpeg'; settings.ffmpegPath = '/nonexistent/ffmpeg';
   try {
     const v = open(fx('clip-mpeg4-mp3.avi')); await v.done; await v.send({ type: 'ready' });
     assert.strictEqual(v.sent[0].plan.mode, 'transcode');
@@ -173,7 +173,17 @@ test('AVI: no ffmpeg gives a stage message with the next step, never a blank pag
     assert.strictEqual(sound(p, 'needs-helper').text, 'This video uses Apple ProRes 422, which VS Code cannot play. Install ffmpeg to convert it for playback.');
     await p.send({ type: 'openExternal' });
     assert.deepStrictEqual(state.opened, [fx('clip-prores422-aac.mov')]);
-  } finally { settings.soundHelper = 'auto'; state.opened = []; }
+  } finally { settings.soundHelper = 'auto'; settings.ffmpegPath = ''; state.opened = []; }
+});
+
+test('helper turned off: the message names the setting, not a missing ffmpeg', async () => {
+  settings.soundHelper = 'off';
+  try {
+    const p = open(fx('clip-prores422-aac.mov')); await p.done; await p.send({ type: 'ready' });
+    const m = sound(p, 'needs-helper');
+    assert.strictEqual(m.off, true);
+    assert.strictEqual(m.text, 'This video uses Apple ProRes 422, which VS Code cannot play. The helper is turned off (setting videoPreview.soundHelper is "off"), so ffmpeg does not run.');
+  } finally { settings.soundHelper = 'auto'; }
 });
 
 test('convert: untrusted workspace and convertUnsupportedVideo=false wait for a click', async () => {

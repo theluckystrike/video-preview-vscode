@@ -100,10 +100,11 @@ class Provider {
       const helper = decoder.findHelper({ setting: c.ffmpegPath, preferred: c.helper, needFfmpeg });
       if (!helper) {
         let text;
-        if (tc) text = cannotPlay + ' Install ffmpeg to convert it for playback.';
+        if (c.helper === 'off') text = (tc ? cannotPlay + ' ' : '') + 'The helper is turned off (setting videoPreview.soundHelper is "off"), so ffmpeg does not run.';
+        else if (tc) text = cannotPlay + ' Install ffmpeg to convert it for playback.';
         else if (mode === 'remux') text = 'Install ffmpeg to open this file. VS Code cannot read ' + path.extname(name) + ' by itself.';
         else text = 'Install ffmpeg to hear this file. VS Code has no ' + media.codecName(p.audioCodec) + ' decoder.';
-        post(toWebview.sound('needs-helper', { mode, text }));
+        post(toWebview.sound('needs-helper', { mode, text, off: c.helper === 'off' }));
         return;
       }
       fs.mkdirSync(cacheDir, { recursive: true });

@@ -317,7 +317,7 @@ function onSound(m) {
       break;
     case 'needs-helper':
     case 'too-big':
-      setChip(tc ? (m.state === 'too-big' ? 'Too big to convert' : 'ffmpeg not found') : m.text, 'warn'); setAction('Settings', 'openSettings');
+      setChip(tc ? (m.state === 'too-big' ? 'Too big to convert' : (m.off ? 'Helper turned off' : 'ffmpeg not found')) : m.text, 'warn'); setAction('Settings', 'openSettings');
       if (videoMode) showStage(m.text, [SETTINGS, OPEN_EXTERNAL]);
       break;
     case 'error':
