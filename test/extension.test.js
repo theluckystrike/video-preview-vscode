@@ -41,7 +41,7 @@ function open(file, globalState) {
       postMessage: (m) => { sent.push(m); return Promise.resolve(true); }, onDidReceiveMessage: (h) => { handler = h; } },
     onDidDispose: (h) => { disposed = h; },
   };
-  const ctx = { extensionUri: Uri.file('/ext'), globalStorageUri: Uri.file(tmp), subscriptions: [], globalState };
+  const ctx = { extensionUri: Uri.file(path.join(__dirname, '..')), globalStorageUri: Uri.file(tmp), subscriptions: [], globalState };
   const p = new Provider(ctx);
   const done = p.resolveCustomEditor({ uri: Uri.file(file) }, panel);
   return { sent, panel, send: (m) => handler(m), done, dispose: () => disposed && disposed() };
@@ -70,12 +70,52 @@ test('no audio track', async () => {
   assert.strictEqual(v.sent[1].state, 'none');
 });
 
-test('untrusted workspace: AAC waits for a click', async () => {
+test('untrusted workspace: AAC plays with the built-in decoder (no program runs)', async () => {
   state.trusted = false;
   try {
     const v = open(fx('clip-aac.mov')); await v.done; await v.send({ type: 'ready' });
-    assert.strictEqual(v.sent[1].state, 'needs-trust');
+    const m = await waitFor(() => v.sent.find((x) => x.type === 'sound' && (x.state === 'ready' || x.state === 'error' || x.state === 'needs-trust')));
+    assert.strictEqual(m.state, 'ready', JSON.stringify(m));
+    assert.strictEqual(m.tool, 'built-in decoder');
+    assert.strictEqual(m.format, 'WAV');
+    assert.ok(m.src.endsWith('.wav'));
   } finally { state.trusted = true; }
+});
+
+test('untrusted workspace: helper "ffmpeg" (no built-in) still waits for a click', async () => {
+  state.trusted = false; settings.soundHelper = 'ffmpeg';
+  try {
+    const v = open(fx('clip-aac.mov')); await v.done; await v.send({ type: 'ready' });
+    assert.strictEqual(v.sent[1].state, 'needs-trust');
+  } finally { state.trusted = true; settings.soundHelper = 'auto'; }
+});
+
+test('no ffmpeg and no afconvert: AAC in MP4 plays with the built-in decoder', async () => {
+  settings.soundHelper = 'builtin'; settings.ffmpegPath = '/nonexistent/ffmpeg';
+  try {
+    const v = open(fx('demo-h264-aac.mp4')); await v.done; await v.send({ type: 'ready' });
+    const m = await waitFor(() => v.sent.find((x) => x.type === 'sound' && (x.state === 'ready' || x.state === 'error' || x.state === 'needs-helper')));
+    assert.strictEqual(m.state, 'ready', JSON.stringify(m));
+    assert.strictEqual(m.tool, 'built-in decoder');
+    const wav = fs.readFileSync(path.join(tmp, 'cache', path.basename(m.src.replace('https://res', ''))));
+    assert.strictEqual(wav.toString('ascii', 0, 4), 'RIFF');
+    const secs = (wav.length - 44) / (48000 * 4);
+    assert.ok(Math.abs(secs - 6) < 0.05, 'WAV is ' + secs + ' s');
+    // Second open: from the cache.
+    const v2 = open(fx('demo-h264-aac.mp4')); await v2.done; await v2.send({ type: 'ready' });
+    const m2 = await waitFor(() => v2.sent.find((x) => x.type === 'sound' && x.state === 'ready'));
+    assert.strictEqual(m2.cached, true);
+  } finally { settings.soundHelper = 'auto'; settings.ffmpegPath = ''; }
+});
+
+test('built-in decoder only: a file that is not a video gets the plain message', async () => {
+  settings.soundHelper = 'builtin';
+  try {
+    const v = open(fx('not-a-video.mp4')); await v.done; await v.send({ type: 'ready' });
+    const m = await waitFor(() => v.sent.find((x) => x.type === 'sound' && x.state === 'error'));
+    assert.match(m.text, /^This file does not look like a video\. VS Code cannot play it and the built-in decoder cannot read it\./);
+    assert.strictEqual(m.final, true);
+  } finally { settings.soundHelper = 'auto'; }
 });
 
 test('file over the size limit plays without a helper and says why', async () => {

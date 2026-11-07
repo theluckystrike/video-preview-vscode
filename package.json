@@ -1,8 +1,8 @@
 {
   "name": "video-preview-with-sound",
   "displayName": "MP4, MOV & MKV Viewer, Video Player with Sound",
-  "description": "MP4 viewer, MOV viewer and video player for VS Code that plays MP4, MOV, MKV, WebM and AVI with the sound VS Code mutes (MKV, WebM and AVI need ffmpeg). Converts ProRes and other codecs VS Code cannot play, shows .srt and .vtt subtitles and remembers where you stopped.",
-  "version": "0.2.4",
+  "description": "MP4 viewer, MOV viewer and video player for VS Code that plays MP4, MOV, MKV, WebM and AVI with the sound VS Code mutes. AAC sound in MP4 and MOV plays with no install (built-in decoder); MKV, WebM and AVI need ffmpeg. Picture-in-picture, .srt and .vtt subtitles, frame steps, and it remembers where you stopped.",
+  "version": "0.2.5",
   "publisher": "zovo",
   "license": "MIT",
   "icon": "icon.png",
@@ -29,6 +29,8 @@
     "video sound",
     "mp4",
     "mov",
+    "pip",
+    "picture in picture",
     "m4v",
     "webm",
     "mkv",
@@ -42,8 +44,6 @@
     "aac",
     "audio",
     "sound",
-    "playback",
-    "frame",
     "screen recording",
     "codec",
     "ffmpeg",
@@ -55,7 +55,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "In an untrusted workspace the video plays, but ffmpeg or afconvert only runs after you click Turn on sound."
+      "description": "In an untrusted workspace the video plays and the built-in decoder gives AAC sound (it runs no program). ffmpeg or afconvert only runs after you click Turn on sound."
     },
     "virtualWorkspaces": {
       "supported": "limited",
@@ -159,16 +159,18 @@
             "auto",
             "ffmpeg",
             "afconvert",
+            "builtin",
             "off"
           ],
           "default": "auto",
           "enumDescriptions": [
-            "Use ffmpeg if found, else afconvert on macOS",
+            "Use ffmpeg if found, else afconvert on macOS, else the built-in decoder",
             "Use ffmpeg only",
             "Use macOS afconvert first (built into macOS, cannot open MKV or WebM)",
-            "Never run a helper: the video plays without sound"
+            "Use only the built-in decoder (AAC, ALAC, MP3 and PCM sound in MP4 and MOV; no install, runs no program)",
+            "Never decode: the video plays without sound"
           ],
-          "description": "Program that turns AAC, AC-3 and other sound VS Code cannot play into FLAC. Nothing is bundled; the extension runs your own copy."
+          "description": "How to decode AAC, AC-3 and other sound VS Code cannot play. The built-in decoder ships with the extension and handles AAC, ALAC, MP3 and PCM in MP4 and MOV. For AC-3, E-AC-3, DTS and for MKV, WebM and AVI files the extension runs your own ffmpeg."
         },
         "videoPreview.ffmpegPath": {
           "type": "string",
@@ -252,7 +254,7 @@
           {
             "id": "sound",
             "title": "Get the sound",
-            "description": "VS Code has no AAC decoder. On macOS the built-in afconvert decodes the sound; on Windows and Linux install ffmpeg. The status chip shows which one ran.\n[Open settings](command:workbench.action.openSettings?%5B%22videoPreview%22%5D)",
+            "description": "AAC sound in MP4 and MOV plays with no install: the built-in decoder ships with the extension. For AC-3 or DTS sound, and for MKV, WebM and AVI files, install ffmpeg. The status chip shows which decoder ran.\n[Open settings](command:workbench.action.openSettings?%5B%22videoPreview%22%5D)",
             "media": {
               "markdown": "walkthrough/sound.md"
             },
@@ -263,7 +265,7 @@
           {
             "id": "keys",
             "title": "Use the keys",
-            "description": "Space plays, comma and period step one frame, [ and ] change speed, A and B set a loop, S saves the frame as PNG, I shows the metadata.",
+            "description": "Space plays, comma and period step one frame, [ and ] change speed, A and B set a loop, S saves the frame as PNG, P opens picture-in-picture, I shows the metadata.",
             "media": {
               "markdown": "walkthrough/keys.md"
             }

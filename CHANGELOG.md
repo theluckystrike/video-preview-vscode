@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.5 (2026-11-08)
+
+- AAC sound in MP4, MOV and M4V files now plays with nothing to install, on Windows, Linux and macOS. The extension carries a built-in decoder (Symphonia compiled to WebAssembly, about 820 KB). It runs in a worker thread, starts no program and makes no network request. ALAC, MP3 and PCM sound work too. ffmpeg or afconvert is still used first if found. If either fails, the built-in decoder takes over. New choice `builtin` for `videoPreview.soundHelper`.
+- In an untrusted workspace, AAC sound now plays by itself through the built-in decoder. ffmpeg and afconvert still wait for a click.
+- New picture-in-picture button (and the P key).
+- The separate sound track is now nudged back in step when it is 0.02 s off (was 0.04 s). In VS Code 1.142 it used to settle about 0.03 s behind the picture.
+- MOV files with PCM sound and MP4 files with ALAC sound used to show "No audio track". They now play with sound.
+- AC-3, E-AC-3, DTS and 5.1 AAC sound still need ffmpeg (or afconvert on macOS), and the player says so.
+
 ## 0.2.4 (2026-11-08)
 
 - MKV files with VP8 video now play. Before, ffmpeg stopped with "Error sending frames to consumers", because VP8 does not fit in MP4. They are converted to H.264 now.

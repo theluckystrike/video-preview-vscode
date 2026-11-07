@@ -7,6 +7,8 @@ const REMUX_EXT = new Set(['.mkv', '.webm']);
 // Containers VS Code never opens: ffmpeg converts them to H.264 MP4. Never .ts or .mts: those are TypeScript.
 const TRANSCODE_EXT = new Set(['.avi', '.mpg', '.mpeg', '.wmv', '.flv', '.ogv', '.m2ts']);
 // Sample entries that are video even when mp4box does not know them (it reports ProRes as 'metadata').
+// Sample entries that are sound when mp4box reports them as 'metadata' (QuickTime PCM, ALAC and others).
+const AUDIO_4CC = /^(sowt|twos|lpcm|raw |in24|in32|fl32|fl64|ulaw|alaw|ima4|alac|ac-3|ec-3|ac-4|opus|flac|fla1|dtsc|dtsh|dtsl|dtse|samr|sawb|mp4a|\.mp3|ipcm|fpcm)/i;
 const VIDEO_4CC = /^(avc[1-4]|hvc1|hev1|dvh[1e]|dva[1v]|vp0[89]|av01|apc[nhso]|ap4[hx]|aprh|aprn|mp4v|mjp[ab]|jpeg|h263|s263|svq[13]|cvid|dv(c |cp|5n|5p|h[1-6p])|r210|v210|2vuy|yuv2|avdn|avdh|ai[5p]|xd5|xdv)/i;
 
 /** Audio codecs that VS Code's own Chromium can play inside MP4 (tested on VS Code 1.142, Electron 43). */
@@ -44,7 +46,38 @@ async function probeMp4(read, size, opts = {}) {
   }
   try { file.flush(); } catch { /* ignore */ }
   if (!info) return { ok: false, error: error || (total >= maxBytes ? 'No movie header in the first ' + Math.round(maxBytes / 1048576) + ' MB' : 'No movie header found'), bytesRead: total };
-  return { ok: true, bytesRead: total, ...summarize(info, size) };
+  const out = { ok: true, bytesRead: total, ...summarize(info, size) };
+  addEdits(out, file, info.timescale);
+  return out;
+}
+
+/**
+ * Edit lists (elst) of each track: `startSkip` = seconds of media cut at the start (the AAC encoder delay, 1024
+ * samples), `startPad` = seconds of empty edit before the track starts. The built-in sound decoder uses them so
+ * the sound lands where ffmpeg would put it.
+ */
+function addEdits(out, file, movieTimescale) {
+  try {
+    for (const trak of (file.moov && file.moov.traks) || []) {
+      const t = out.tracks.find((x) => x.id === trak.tkhd.track_id);
+      const entries = trak.edts && trak.edts.elst && trak.edts.elst.entries;
+      if (!t || !entries || !entries.length) continue;
+      const e = editOffsets(entries, movieTimescale, trak.mdia && trak.mdia.mdhd ? trak.mdia.mdhd.timescale : 0);
+      if (e.startSkip) t.startSkip = e.startSkip;
+      if (e.startPad) t.startPad = e.startPad;
+    }
+  } catch { /* odd box tree: no edits */ }
+}
+
+function editOffsets(entries, movieTimescale, mediaTimescale) {
+  let startPad = 0; let startSkip = 0;
+  for (const e of entries) {
+    const mt = Number(e.media_time);
+    if (mt === -1 || mt === 0xffffffff) { if (movieTimescale > 0) startPad += Number(e.segment_duration) / movieTimescale; continue; }
+    if (mediaTimescale > 0 && mt > 0) startSkip = mt / mediaTimescale;
+    break;
+  }
+  return { startSkip: round(startSkip, 6), startPad: round(startPad, 6) };
 }
 
 function summarize(info, size) {
@@ -55,7 +88,7 @@ function summarize(info, size) {
       const fps = seconds > 0 ? t.nb_samples / seconds : 0;
       return { ...base, type: 'video', width: t.video ? t.video.width : Math.round(t.track_width || 0), height: t.video ? t.video.height : Math.round(t.track_height || 0), fps: round(fps, 3) };
     }
-    if (t.type === 'audio' || t.audio) return { ...base, type: 'audio', sampleRate: t.audio ? t.audio.sample_rate : 0, channels: t.audio ? t.audio.channel_count : 0 };
+    if (t.type === 'audio' || t.audio || AUDIO_4CC.test(String(t.codec || ''))) return { ...base, type: 'audio', sampleRate: t.audio ? t.audio.sample_rate : 0, channels: t.audio ? t.audio.channel_count : 0 };
     return base;
   });
   const duration = info.timescale ? info.duration / info.timescale : Math.max(0, ...tracks.map((t) => t.seconds));
@@ -112,4 +145,4 @@ function notVideoText(size, tool) {
   return 'This file does not look like a video. VS Code cannot play it' + (tool ? ' and ' + tool + ' cannot read it' : '') + '. It may be damaged, still downloading, or another kind of file with a video extension.';
 }
 
-module.exports = { isNotMediaError, notVideoText, probeMp4, summarize, plan, transcodePlan, fallbackPlan, nativeAudio, nativeVideo, codecName, MP4_EXT, REMUX_EXT, TRANSCODE_EXT, VIDEO_4CC };
+module.exports = { AUDIO_4CC, editOffsets, isNotMediaError, notVideoText, probeMp4, summarize, plan, transcodePlan, fallbackPlan, nativeAudio, nativeVideo, codecName, MP4_EXT, REMUX_EXT, TRANSCODE_EXT, VIDEO_4CC };

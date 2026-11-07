@@ -45,6 +45,10 @@ const muteBtn = el('button', { class: 'btn', title: 'Mute (M)', text: 'Mute' });
 const vol = el('input', { class: 'vol', type: 'range', min: '0', max: '1', step: '0.05', value: '1', 'aria-label': 'Volume' });
 const shotBtn = el('button', { class: 'btn', title: 'Save this frame as PNG (S)', text: 'Save frame' });
 const infoBtn = el('button', { class: 'btn', title: 'Show metadata (I)', text: 'Info' });
+// Picture-in-picture: the video floats over other windows. The sound keeps playing from this tab.
+const pipBtn = el('button', { class: 'btn pip', title: 'Picture-in-picture (P)', 'aria-label': 'Picture-in-picture', text: 'PiP' });
+const pipOk = !!(document.pictureInPictureEnabled && video.requestPictureInPicture);
+if (!pipOk) pipBtn.classList.add('hidden');
 const ccSel = el('select', { class: 'speed cc', title: 'Subtitles (C)', 'aria-label': 'Subtitles' });
 const soundChip = el('span', { class: 'chip', role: 'status', text: 'Sound: checking' });
 const soundAction = el('button', { class: 'btn link hidden', text: '' });
@@ -53,7 +57,7 @@ const info = el('aside', { class: 'info hidden' });
 const msg = el('div', { class: 'msg hidden' });
 
 const bar1 = el('div', { class: 'bar' }, playBtn, timeEl, frameEl, seekWrap);
-const bar2 = el('div', { class: 'bar' }, prevF, nextF, speedSel, aBtn, bBtn, loopBtn, el('span', { class: 'sep' }), muteBtn, vol, ccSel, shotBtn, infoBtn, el('span', { class: 'grow' }), soundChip, soundAction);
+const bar2 = el('div', { class: 'bar' }, prevF, nextF, speedSel, aBtn, bBtn, loopBtn, el('span', { class: 'sep' }), muteBtn, vol, ccSel, shotBtn, pipBtn, infoBtn, el('span', { class: 'grow' }), soundChip, soundAction);
 app.replaceChildren(el('div', { class: 'player' }, el('div', { class: 'main' }, stage, msg, bar1, bar2), info), toast);
 
 function showToast(t) { toast.textContent = t; toast.classList.remove('hidden'); clearTimeout(showToast.t); showToast.t = setTimeout(() => toast.classList.add('hidden'), 2200); }
@@ -104,6 +108,15 @@ loopBtn.onclick = () => { S.loop = !S.loop; if (S.loop && (S.a == null || S.b ==
 muteBtn.onclick = () => { S.muted = !S.muted; applyVolume(); remember(true); };
 vol.oninput = () => { S.volume = Number(vol.value); S.muted = S.volume === 0; applyVolume(); clearTimeout(vol.t); vol.t = setTimeout(() => remember(true), 400); };
 shotBtn.onclick = saveFrame;
+function togglePip() {
+  if (!pipOk) { showToast('Picture-in-picture is not available here'); return; }
+  if (document.pictureInPictureElement) { document.exitPictureInPicture().catch(() => {}); return; }
+  if (!video.videoWidth) { showToast('No picture yet'); return; }
+  video.requestPictureInPicture().catch((e) => showToast('Picture-in-picture: ' + e.message));
+}
+pipBtn.onclick = togglePip;
+video.addEventListener('enterpictureinpicture', () => { pipBtn.classList.add('on'); pipBtn.setAttribute('aria-pressed', 'true'); });
+video.addEventListener('leavepictureinpicture', () => { pipBtn.classList.remove('on'); pipBtn.setAttribute('aria-pressed', 'false'); });
 infoBtn.onclick = () => info.classList.toggle('hidden');
 seek.oninput = () => { if (S.duration) seekTo((Number(seek.value) / 1000) * S.duration); };
 
@@ -262,7 +275,7 @@ document.addEventListener('keydown', (e) => {
     ' ': togglePlay, k: togglePlay, ',': () => step(-1), '.': () => step(1),
     ArrowLeft: () => seekTo(video.currentTime - (e.shiftKey ? 1 : 5)), ArrowRight: () => seekTo(video.currentTime + (e.shiftKey ? 1 : 5)),
     '[': () => setSpeed(nextSpeed(video.playbackRate, -1)), ']': () => setSpeed(nextSpeed(video.playbackRate, 1)),
-    a: () => aBtn.onclick(), b: () => bBtn.onclick(), l: () => loopBtn.onclick(), m: () => muteBtn.onclick(), s: saveFrame, i: () => infoBtn.onclick(), c: toggleCaptions,
+    a: () => aBtn.onclick(), b: () => bBtn.onclick(), l: () => loopBtn.onclick(), m: () => muteBtn.onclick(), s: saveFrame, i: () => infoBtn.onclick(), c: toggleCaptions, p: togglePip,
     Home: () => seekTo(0), End: () => seekTo(S.duration),
   }[k.length === 1 ? k.toLowerCase() : k];
   if (handled && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); handled(); }
@@ -386,7 +399,7 @@ function videoPath() {
 function soundPath() {
   const i = S.soundInfo;
   if (S.sound === 'native') return 'played by VS Code';
-  if (S.sound === 'ready') return (i.mode === 'remux' ? 'remuxed to MP4 + FLAC by ' : i.mode === 'transcode' ? 'converted to FLAC with the video by ' : 'decoded to FLAC by ') + i.tool;
+  if (S.sound === 'ready') return (i.mode === 'remux' ? 'remuxed to MP4 + FLAC by ' : i.mode === 'transcode' ? 'converted to FLAC with the video by ' : 'decoded to ' + (i.format || 'FLAC') + ' by ' + (/^built-in/.test(i.tool) ? 'the ' : '')) + i.tool;
   if (S.sound === 'none') return 'no audio track';
   return i.text || S.sound;
 }
@@ -412,7 +425,7 @@ function e2eReport() {
   vscode.postMessage({ type: 'stats', stats: { ...(S.stats || {}), sound: S.sound, tool: S.soundInfo.tool || null, playing: playing(), t: video.currentTime,
     audioT: S.audio ? S.audio.currentTime : null, drift: S.audio ? S.audio.currentTime - video.currentTime : null, videoMuted: video.muted,
     w: video.videoWidth, h: video.videoHeight, vBytes: video.webkitVideoDecodedByteCount, aBytes: S.audio ? S.audio.webkitAudioDecodedByteCount : video.webkitAudioDecodedByteCount,
-    rate: video.playbackRate, loop: S.loop, a: S.a, b: S.b, frame: frameNumber(video.currentTime, S.fps), chip: soundChip.textContent, msg: msg.textContent } });
+    rate: video.playbackRate, pip: !!document.pictureInPictureElement, audioRate: S.audio ? S.audio.playbackRate : null, loop: S.loop, a: S.a, b: S.b, frame: frameNumber(video.currentTime, S.fps), chip: soundChip.textContent, msg: msg.textContent } });
 }
 
 window.addEventListener('message', (ev) => {

@@ -3,7 +3,7 @@
 // Small drift is fixed by nudging the audio rate; big drift by a seek.
 
 const HARD = 0.25; // seconds: seek
-const SOFT = 0.04; // seconds: nudge
+const SOFT = 0.02; // seconds: nudge (0.04 left a steady 32 ms lag in VS Code 1.142 uncorrected)
 
 function syncAction(videoTime, audioTime, rate) {
   const d = audioTime - videoTime;

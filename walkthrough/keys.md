@@ -11,3 +11,4 @@
 | M | Mute |
 | S | Save the current frame as PNG |
 | I | Show or hide the metadata |
+| P | Picture-in-picture on or off |

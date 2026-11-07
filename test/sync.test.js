@@ -7,6 +7,7 @@ test('syncAction: in step, nudge, seek', () => {
   assert.deepStrictEqual(s.syncAction(10, 10.01, 1), { rate: 1 });
   assert.ok(s.syncAction(10, 10.1, 1).rate < 1);
   assert.ok(s.syncAction(10, 9.9, 1).rate > 1);
+  assert.ok(s.syncAction(10, 9.968, 1).rate > 1, 'a 32 ms lag is nudged');
   assert.deepStrictEqual(s.syncAction(10, 11, 2), { seek: 10, rate: 2 });
   assert.deepStrictEqual(s.syncAction(10, NaN, 1), { rate: 1 });
 });

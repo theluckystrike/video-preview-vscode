@@ -5,7 +5,9 @@
 
 Click an `.mp4`, `.mov`, `.mkv`, `.webm` or `.avi` file and it plays in a video player inside VS Code with its sound, which VS Code's own player leaves out for AAC audio.
 
-Version 0.2.0 adds three things. Videos VS Code can't decode, such as Apple ProRes, MPEG-4 Part 2 and AVI, are converted to H.264 with your ffmpeg and then play. Subtitles from an `.srt` or `.vtt` file next to the video show up by themselves. And each video opens where you stopped it last time.
+Version 0.2.5 plays AAC sound in MP4 and MOV with nothing to install, on Windows, Linux and macOS. A built-in decoder ships inside the extension. It also adds a picture-in-picture button (P).
+
+Version 0.2.0 added three things. Videos VS Code can't decode, such as Apple ProRes, MPEG-4 Part 2 and AVI, are converted to H.264 with your ffmpeg and then play. Subtitles from an `.srt` or `.vtt` file next to the video show up by themselves. And each video opens where you stopped it last time.
 
 ![talk.mp4 playing in VS Code with the subtitle line "Subtitles from talk.srt load by themselves." drawn at the bottom of the picture. The CC menu in the control bar shows "CC: Subtitles (SRT)", and the chip says "Sound: on (ffmpeg)"](https://github.com/theluckystrike/video-preview-vscode/raw/HEAD/images/subtitles.png)
 
@@ -13,7 +15,8 @@ Version 0.2.0 adds three things. Videos VS Code can't decode, such as Apple ProR
 
 *Real output from VS Code 1.142 on macOS. The four new screenshots above and below come from the 0.2.0 VSIX installed in a clean VS Code profile, with test clips made by ffmpeg. `scripts/e2e-vscode.mjs` opened the 6-second sample from `scripts/make-samples.js` with this extension, clicked Play, set the loop with the A and B keys and took the window screenshot over the Chrome DevTools protocol. The webview measured the sound level at 0.12 RMS while it played. VS Code's own player gives 0 on the same file.*
 
-- You hear the sound. VS Code can show H.264 video but has no AAC decoder, and most MP4 and MOV files use AAC. This extension decodes the sound to FLAC with a program you already have (afconvert, which comes with macOS, or your own ffmpeg) and keeps it in step with the picture. In our tests the drift stayed under 0.1 s.
+- You hear the sound, with no setup. VS Code can show H.264 video but has no AAC decoder, and most MP4 and MOV files use AAC. The extension carries its own decoder (Symphonia, compiled to WebAssembly, about 820 KB). It decodes AAC, ALAC, MP3 and PCM sound in a background thread and keeps the result in step with the picture. A 150-second AAC track took 0.2 s on an M-series Mac. For other sound, such as AC-3, E-AC-3, DTS or 5.1 AAC, it uses your ffmpeg or the afconvert that comes with macOS.
+- Picture-in-picture. The PiP button (or P) floats the video over your other windows while the sound keeps playing.
 - It's built for checking clips frame by frame. Step one frame at a time, play at 0.1× to 4×, loop between two points, and save the exact frame as a full-size PNG. The frame counter matches the frame number that ffmpeg burned into the test video.
 - It converts what VS Code can't decode. A ProRes `.mov`, an MPEG-4 Part 2 `.mp4`, or an `.avi`, `.wmv`, `.flv`, `.mpg`, `.ogv` or `.m2ts` file is turned into H.264 with your ffmpeg and plays. A 3-second 1080p ProRes test clip took 0.4 s. The chip shows the progress, and the copy stays in the cache, so the next open is instant. If a video still won't show a picture, the player converts it once by itself instead of leaving a black box.
 - Subtitles just work. `clip.srt`, `clip.vtt`, `clip.en.srt` or `clip.pt-BR.vtt` next to `clip.mp4` load as you open the video. Press C or use the CC menu to switch tracks, turn them off, or load any other `.srt` or `.vtt` file.
@@ -26,24 +29,25 @@ Version 0.2.0 adds three things. Videos VS Code can't decode, such as Apple ProR
 
 ## Quick start
 
-1. Install Video Preview with Sound. On Windows run `winget install ffmpeg`, on Linux `sudo apt install ffmpeg`. macOS needs nothing, though ffmpeg (`brew install ffmpeg`) is faster and adds MKV and WebM.
+1. Install Video Preview with Sound. MP4, MOV and M4V files with AAC sound play with no other install. For MKV, WebM, AVI and AC-3 sound, add ffmpeg: `winget install ffmpeg` on Windows, `sudo apt install ffmpeg` on Linux, `brew install ffmpeg` on macOS.
 2. Click a video in the Explorer and press Space.
 
 If VS Code asks which editor to use for `.mp4`, pick "Video Preview with Sound" (VS Code has its own simple preview too). Run "Video Preview: Get Started" from the Command Palette for a short tour.
 
 ## Why VS Code mutes your videos
 
-VS Code's built-in Chromium ships with the H.264 video decoder but without AAC. We tested this on VS Code 1.142 (Electron 43, Chrome 150) before writing any player code. `canPlayType` and WebCodecs both say AAC is supported, but decoding fails, and the audio element reports 0 decoded bytes. MP3, FLAC and WAV sound do play. So the extension reads the codec from the file header and picks one of these paths.
+VS Code's built-in Chromium ships with the H.264 video decoder but without AAC. We tested this on VS Code 1.142 (Electron 43, Chrome 150) before writing any player code. `canPlayType` and WebCodecs both say AAC is supported, but decoding fails, and the audio element reports 0 decoded bytes. MP3, FLAC and WAV sound do play. VS Code 1.142 also has no Matroska demuxer: an `.mkv` or `.webm` in its video element fails with "FFmpegDemuxer: open context failed", even with VP9 and Opus inside. So the extension reads the codec from the file header and picks one of these paths.
 
 | The file has | What happens | Helper |
 |---|---|---|
 | H.264, HEVC or VP9 video with MP3 or FLAC sound | VS Code plays it directly | none |
-| AAC, AC-3, E-AC-3, Opus or ALAC sound in MP4, M4V or MOV | the sound is decoded to FLAC and plays next to the muted video | afconvert (macOS) or ffmpeg |
+| AAC (mono or stereo), ALAC, PCM or MP3 sound in MP4, M4V or MOV | the sound is decoded and plays next to the muted video | none (built-in decoder), or ffmpeg or afconvert if found |
+| AC-3, E-AC-3, DTS, Opus or 5.1 AAC sound in MP4, M4V or MOV | the sound is decoded to FLAC and plays next to the muted video | afconvert (macOS) or ffmpeg |
 | MKV or WebM | video copied into MP4, sound converted to FLAC, one file. VP8, Theora, MPEG-4 Part 2 or MPEG-2 video is converted to H.264 | ffmpeg |
 | no audio track | plays, and the chip says "No audio track" | none |
 | ProRes, MPEG-4 Part 2, DNxHD or other video VS Code can't decode, and `.avi`, `.wmv`, `.flv`, `.mpg`, `.mpeg`, `.ogv`, `.m2ts` | converted to H.264 (libx264, or VideoToolbox or Media Foundation if your ffmpeg has no libx264), sound to FLAC | ffmpeg |
 
-The FLAC file goes into the extension's own storage folder and is reused next time, so a file is only decoded once. The cache keeps the newest 2 GB by default. "Video Preview: Clear Sound Cache" empties it.
+The decoded sound (FLAC from ffmpeg or afconvert, WAV from the built-in decoder) goes into the extension's own storage folder and is reused next time, so a file is only decoded once. The cache keeps the newest 2 GB by default. "Video Preview: Clear Sound Cache" empties it.
 
 ![An MKV file with H.264 and AAC, remuxed by ffmpeg in 0.1 s, playing with the metadata panel open](https://github.com/theluckystrike/video-preview-vscode/raw/HEAD/images/mkv.png)
 
@@ -73,7 +77,7 @@ The metadata panel shows container brands, duration, codec, frame size, frame ra
 
 | Setting | Default | What it does |
 |---|---|---|
-| `videoPreview.soundHelper` | `auto` | `auto` uses ffmpeg if it's found, else afconvert on macOS. `ffmpeg`, `afconvert` or `off` force one choice |
+| `videoPreview.soundHelper` | `auto` | `auto` uses ffmpeg if it's found, else afconvert on macOS, else the built-in decoder. `ffmpeg`, `afconvert`, `builtin` or `off` force one choice |
 | `videoPreview.ffmpegPath` | empty | Full path to ffmpeg. Empty means search PATH, `/opt/homebrew/bin` and `/usr/local/bin` |
 | `videoPreview.decodeSoundAutomatically` | `true` | Off means the helper waits for a click on "Turn on sound" |
 | `videoPreview.maxDecodeSizeMB` | 4096 | Bigger files still play, without sound, and the chip says why |
@@ -88,13 +92,15 @@ The metadata panel shows container brands, duration, codec, frame size, frame ra
 
 ## Privacy and safety
 
-The extension makes no network calls and has no telemetry. The webview runs under a strict Content Security Policy with no inline or remote scripts, and file names and metadata are only ever set as text. Nothing in a video file is run. The helper is started with an argument list and no shell, ffmpeg reads the input through `file:` so a crafted file name can't act as an option or protocol, and closing the tab stops it. In an untrusted workspace no helper starts until you click "Turn on sound". ffmpeg isn't bundled, so no GPL or LGPL code ships with this extension.
+The extension makes no network calls and has no telemetry. The webview runs under a strict Content Security Policy with no inline or remote scripts, and file names and metadata are only ever set as text. Nothing in a video file is run. The helper is started with an argument list and no shell, ffmpeg reads the input through `file:` so a crafted file name can't act as an option or protocol, and closing the tab stops it. In an untrusted workspace no helper starts until you click "Turn on sound". The built-in decoder still gives AAC sound there, because it starts no program: it is WebAssembly with no file or network access of its own, run in a worker thread that reads the one file in pieces. ffmpeg isn't bundled, so no GPL or LGPL code ships with this extension. The built-in decoder is Symphonia (MPL-2.0). Its source is in `wasm/` in the repository.
 
 ## Known limits
 
 - Big files stream from disk and the picture starts at once, but the sound has to be decoded first. For a 1-hour AAC track that took 5.7 s with ffmpeg and 17.8 s with afconvert on an M-series Mac. The video plays muted until the chip says "Sound: on".
-- FLAC is large. That 1-hour track became about 370 MB in the cache, so the 2 GB default holds roughly five hours of sound.
-- The separate sound track is nudged when it drifts more than 0.04 s from the picture and moved back when it drifts more than 0.25 s. MKV and WebM stay tighter, because they play as one remuxed file.
+- FLAC is large. That 1-hour track became about 370 MB in the cache, so the 2 GB default holds roughly five hours of sound. The built-in decoder writes WAV, which is about twice that (11.5 MB a minute at 48 kHz stereo), so the cache holds about 3 hours of it.
+- The built-in decoder plays HE-AAC from its AAC-LC core, at half the sample rate, so it lacks the top octave. Install ffmpeg for full HE-AAC, 5.1 AAC, AC-3 and DTS.
+- Picture-in-picture closes when you switch to another editor tab, because VS Code unloads hidden players.
+- The separate sound track is nudged when it drifts more than 0.02 s from the picture and moved back when it drifts more than 0.25 s. MKV and WebM stay tighter, because they play as one remuxed file.
 - MKV and WebM with VP8, Theora, MPEG-4 Part 2 or MPEG-2 video can't play as a copy, so they are converted to H.264. On a long file that takes a while, like any conversion.
 - Without ffmpeg, MKV and WebM don't open. The player says "Install ffmpeg to open this file" and offers Settings and Open in default app.
 - HEVC needs hardware decoding, which macOS has. AV1 depends on your GPU.

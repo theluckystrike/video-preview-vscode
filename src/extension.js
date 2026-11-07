@@ -5,6 +5,7 @@ const path = require('path');
 const { buildHtml } = require('./html');
 const media = require('./core/media');
 const decoder = require('./core/decoder');
+const builtin = require('./core/builtin');
 const { parseFromWebview, pngFromDataUrl, toWebview } = require('./core/protocol');
 const { shotName } = require('./core/sync');
 const { findSidecars, loadTrack } = require('./core/sidecars');
@@ -13,6 +14,9 @@ const { createRatingPrompt } = require('./rate');
 const { registerSupport, commandUris, showLinks } = require('./support');
 
 let rating = { success() {}, failure() {} };
+
+// The sound decoder shipped in the extension (WebAssembly in a worker thread). It starts no program.
+const BUILTIN = { tool: 'built-in decoder', path: null, builtin: true };
 
 const VIEW_TYPE = 'videoPreview.player';
 
@@ -92,8 +96,12 @@ class Provider {
       if (state.stat && state.stat.size === 0) { post(toWebview.sound('error', { mode, final: true, text: media.notVideoText(0) })); return; }
       const c = cfg();
       const needFfmpeg = mode === 'remux' || tc;
+      // AAC, ALAC, MP3 and PCM in MP4 and MOV: the built-in decoder works with no install, and also in an
+      // untrusted workspace, because it runs no program.
+      const builtinOk = mode === 'decode-audio' && ['auto', 'afconvert', 'builtin'].includes(c.helper) && builtin.supports(p.audioCodec);
+      const untrustedAuto = !vscode.workspace.isTrusted && !userAsked;
       const cannotPlay = p.videoCodec ? 'This video uses ' + media.codecName(p.videoCodec) + ', which VS Code cannot play.' : 'VS Code cannot play ' + path.extname(name).toLowerCase() + ' files.';
-      if (!vscode.workspace.isTrusted && !userAsked) {
+      if (untrustedAuto && !builtinOk) {
         post(toWebview.sound('needs-trust', { mode, text: tc ? cannotPlay + ' This workspace is not trusted, so ffmpeg does not start by itself.' : 'This workspace is not trusted, so no helper runs by itself.' }));
         return;
       }
@@ -105,43 +113,61 @@ class Provider {
         post(toWebview.sound('too-big', { mode, text: `This file is ${(state.stat.size / 1048576).toFixed(0)} MB. ${tc ? 'Conversion' : 'Sound decoding'} stops at ${c.maxDecodeMB} MB (setting videoPreview.maxDecodeSizeMB).` }));
         return;
       }
-      const helper = decoder.findHelper({ setting: c.ffmpegPath, preferred: c.helper, needFfmpeg });
+      let helper = c.helper === 'builtin' || untrustedAuto ? null : decoder.findHelper({ setting: c.ffmpegPath, preferred: c.helper, needFfmpeg });
+      if (!helper && builtinOk) helper = BUILTIN;
       if (!helper) {
         let text;
         if (c.helper === 'off') text = (tc ? cannotPlay + ' ' : '') + 'The helper is turned off (setting videoPreview.soundHelper is "off"), so ffmpeg does not run.';
         else if (tc) text = cannotPlay + ' Install ffmpeg to convert it for playback.';
         else if (mode === 'remux') text = 'Install ffmpeg to open this file. VS Code cannot read ' + path.extname(name) + ' by itself.';
-        else text = 'Install ffmpeg to hear this file. VS Code has no ' + media.codecName(p.audioCodec) + ' decoder.';
+        else if (c.helper === 'ffmpeg') text = 'Install ffmpeg to hear this file (setting videoPreview.soundHelper is "ffmpeg"). VS Code has no ' + media.codecName(p.audioCodec) + ' decoder.';
+        else text = 'Install ffmpeg to hear this file. VS Code and the built-in decoder have no ' + media.codecName(p.audioCodec) + ' decoder.';
         post(toWebview.sound('needs-helper', { mode, text, off: c.helper === 'off' }));
         return;
       }
       fs.mkdirSync(cacheDir, { recursive: true });
-      const key = decoder.cacheKey(uri.fsPath, state.stat, helper.tool, mode);
       const isVideo = mode === 'remux' || tc;
-      const out = path.join(cacheDir, key + (isVideo ? '.mp4' : '.flac'));
+      const outFor = (h) => path.join(cacheDir, decoder.cacheKey(uri.fsPath, state.stat, h.tool, mode) + (isVideo ? '.mp4' : h.builtin ? '.wav' : '.flac'));
+      let out = outFor(helper);
       const done = (file, ms, cached, encoder, doneMode = mode) => {
         try { const now = new Date(); fs.utimesSync(file, now, now); } catch { /* ignore */ }
         const src = w.asWebviewUri(vscode.Uri.file(file)).toString();
         if (doneMode === 'transcode') state.converted = true;
         if (isVideo) post(toWebview.media(src));
-        post(toWebview.sound('ready', { src: isVideo ? null : src, tool: helper.tool, ms, cached, mode: doneMode, encoder }));
+        post(toWebview.sound('ready', { src: isVideo ? null : src, tool: helper.tool, ms, cached, mode: doneMode, encoder, format: helper.builtin ? 'WAV' : 'FLAC' }));
       };
       if (fs.existsSync(out)) { done(out, 0, true); return; }
-      post(toWebview.sound('decoding', { tool: helper.tool, progress: null, mode }));
       const duration = state.meta && state.meta.ok ? state.meta.duration : 0;
-      const thisJob = decoder.run({ helper, input: uri.fsPath, output: out, mode, duration, timeoutMs: c.timeoutSec * 1000,
-        onProgress: (f) => { if (my === gen) post(toWebview.sound('decoding', { tool: helper.tool, progress: f, mode })); } });
-      job = thisJob;
-      const r = await thisJob.promise;
-      if (job === thisJob) job = null;
+      const runWith = async (h) => {
+        post(toWebview.sound('decoding', { tool: h.tool, progress: null, mode }));
+        const onProgress = (f) => { if (my === gen) post(toWebview.sound('decoding', { tool: h.tool, progress: f, mode })); };
+        const thisJob = h.builtin
+          ? builtin.run({ input: uri.fsPath, output: out, ...builtin.startFrames(state.meta), duration, timeoutMs: c.timeoutSec * 1000, onProgress,
+            wasmPath: path.join(this.ctx.extensionUri.fsPath, 'media', 'vp-audio.wasm'), workerPath: path.join(this.ctx.extensionUri.fsPath, 'dist', 'audio-worker.js') })
+          : decoder.run({ helper: h, input: uri.fsPath, output: out, mode, duration, timeoutMs: c.timeoutSec * 1000, onProgress });
+        job = thisJob;
+        const res = await thisJob.promise;
+        if (job === thisJob) job = null;
+        return res;
+      };
+      let r = await runWith(helper);
       if (my !== gen) return;
+      if (!r.ok && !helper.builtin && builtinOk && !/^Stopped\.$/.test(r.error || '') && !media.isNotMediaError(r.error)) {
+        // ffmpeg or afconvert failed on the sound: one more try with the built-in decoder.
+        helper = BUILTIN; out = outFor(helper);
+        r = await runWith(helper);
+        if (my !== gen) return;
+      }
       if (r.ok && mode === 'remux' && r.mode === 'transcode') {
         // The MKV or WebM held a video codec that MP4 or VS Code cannot take, so ffmpeg converted it to H.264.
         state.plan = media.transcodePlan(r.videoCodec, false);
         post(toWebview.plan(state.plan));
       }
       if (r.ok) { done(out, r.ms, false, r.encoder, r.mode === 'transcode' ? 'transcode' : mode); decoder.pruneCache(cacheDir, c.cacheMB * 1048576, new Set([out])); }
-      else if (media.isNotMediaError(r.error) && !(state.meta && state.meta.ok)) post(toWebview.sound('error', { tool: helper.tool, mode, final: true, text: media.notVideoText(state.stat ? state.stat.size : null, helper.tool) }));
+      else if (helper.builtin && (r.status === -2 || r.status === -3) && state.meta && state.meta.ok) {
+        // A sound format the built-in decoder does not have (5.1 AAC, a codec mp4box names but Symphonia does not).
+        post(toWebview.sound('needs-helper', { mode, text: 'Install ffmpeg to hear this file. ' + r.error }));
+      } else if ((media.isNotMediaError(r.error) || (helper.builtin && r.status === -1)) && !(state.meta && state.meta.ok)) post(toWebview.sound('error', { tool: helper.tool, mode, final: true, text: media.notVideoText(state.stat ? state.stat.size : null, helper.builtin ? 'the built-in decoder' : helper.tool) }));
       else post(toWebview.sound('error', { tool: helper.tool, mode, text: helper.tool + (tc ? ' could not convert this video: ' : ' could not read this file: ') + r.error }));
     };
 
