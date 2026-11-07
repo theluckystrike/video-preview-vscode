@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.4 (2026-11-08)
+
+- MKV files with VP8 video now play. Before, ffmpeg stopped with "Error sending frames to consumers", because VP8 does not fit in MP4. They are converted to H.264 now.
+- MKV files with MPEG-4 Part 2 or MPEG-2 video now show the picture. Before, the video was copied into MP4 and played with sound but a black picture. ffmpeg's log names the codec, and these are converted to H.264.
+- An MKV or WebM with only an audio track no longer fails with "Stream map matches no streams".
+- The Marketplace name is now "MP4, MOV & MKV Viewer, Video Player with Sound". The extension ID, settings and commands stay the same. The README and description say that MKV, WebM and AVI need ffmpeg.
+
 ## 0.2.3 (2026-11-08)
 
 - The "More free viewers" list and the README now use the current Marketplace names and include the newest Zovo extensions: ZIP, GCode, EPUB, HAR, font and audio viewers.

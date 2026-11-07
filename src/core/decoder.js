@@ -60,15 +60,16 @@ function fallbackEncoder(errorText, failed = 'libx264', platform = process.platf
 
 function buildArgs(tool, input, output, mode, opts = {}) {
   if (tool === 'afconvert') return ['-f', 'flac', '-d', 'flac', path.resolve(input), path.resolve(output)];
-  // 'info' for transcode so the input duration is printed (progress for files without MP4 metadata, like AVI).
-  const head = ['-nostdin', '-hide_banner', '-loglevel', mode === 'transcode' ? 'info' : 'error', '-y', '-i', ffmpegInput(input)];
+  // 'info' for transcode and remux: the input duration (progress for files without MP4 metadata) and the input
+  // video codec (a remux that copies a codec VS Code cannot decode is converted instead).
+  const head = ['-nostdin', '-hide_banner', '-loglevel', mode === 'transcode' || mode === 'remux' ? 'info' : 'error', '-y', '-i', ffmpegInput(input)];
   const tail = ['-progress', 'pipe:1', '-nostats'];
   if (mode === 'transcode') {
-    return [...head, '-map', '0:v:0', '-map', '0:a:0?', '-sn', '-dn', ...encoderArgs(opts.encoder), '-pix_fmt', 'yuv420p', '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+    return [...head, '-map', '0:v:0?', '-map', '0:a:0?', '-sn', '-dn', ...encoderArgs(opts.encoder), '-pix_fmt', 'yuv420p', '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
       '-c:a', 'flac', '-strict', '-2', '-movflags', '+faststart', '-f', 'mp4', ...tail, ffmpegInput(output)];
   }
   if (mode === 'remux') {
-    return [...head, '-map', '0:v:0', '-map', '0:a:0?', '-sn', '-dn', '-c:v', 'copy', '-c:a', 'flac', '-strict', '-2', '-movflags', '+faststart', '-f', 'mp4', ...tail, ffmpegInput(output)];
+    return [...head, '-map', '0:v:0?', '-map', '0:a:0?', '-sn', '-dn', '-c:v', 'copy', '-c:a', 'flac', '-strict', '-2', '-movflags', '+faststart', '-f', 'mp4', ...tail, ffmpegInput(output)];
   }
   return [...head, '-map', '0:a:0', '-vn', '-sn', '-dn', '-c:a', 'flac', '-f', 'flac', ...tail, ffmpegInput(output)];
 }
@@ -77,6 +78,25 @@ function buildArgs(tool, input, output, mode, opts = {}) {
 function parseDuration(text) {
   const m = /Duration:\s*(\d+):(\d{2}):(\d{2}(?:\.\d+)?)/.exec(String(text || ''));
   return m ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) : 0;
+}
+
+/**
+ * The first input video codec in an ffmpeg log ("Stream #0:0: Video: mpeg4 (Simple Profile)") as ffmpeg names it,
+ * '' when the input has streams but none is video, or null when the log shows no input streams.
+ */
+function inputVideoCodec(log) {
+  const t = String(log || '');
+  const out = t.search(/^Output #\d/m);
+  const input = out >= 0 ? t.slice(0, out) : t;
+  const m = /Stream #\d+:\d+[^\n]*?: Video: ([A-Za-z0-9_]+)/.exec(input);
+  if (m) return m[1].toLowerCase();
+  return /Stream #\d+:\d+/.test(input) ? '' : null;
+}
+
+/** Video codecs that VS Code plays after a copy into MP4: H.264, HEVC, VP9, AV1. Unknown or no video counts as playable. */
+function remuxPlayable(codec) {
+  if (codec == null || codec === '') return true;
+  return /^(h264|hevc|h265|vp9|av1)$/.test(String(codec).toLowerCase());
 }
 
 /** Parse ffmpeg -progress output. Returns seconds done, or null. */
@@ -97,6 +117,7 @@ function cacheKey(file, stat, tool, mode) {
  * Returns {promise, cancel}.
  */
 function run(opts) {
+  if (opts.mode === 'remux' && opts.helper.tool === 'ffmpeg') return runRemux(opts);
   if (opts.mode !== 'transcode' || opts.helper.tool !== 'ffmpeg') return runOnce(opts);
   // Transcode: libx264 first; if this ffmpeg has no libx264, one more try with the platform's hardware encoder.
   let current = runOnce({ ...opts, encoder: 'libx264' });
@@ -106,6 +127,26 @@ function run(opts) {
     if (!next) return { ...r, encoder: r.ok ? 'libx264' : undefined };
     current = runOnce({ ...opts, encoder: next });
     return current.promise.then((r2) => ({ ...r2, encoder: r2.ok ? next : undefined, firstError: r.error }));
+  });
+  return { promise, cancel: () => { cancelled = true; current.cancel(); } };
+}
+
+/**
+ * Remux (MKV, WebM): copy the video into MP4. When the copy fails (VP8 and Theora do not fit in MP4) or the video
+ * codec is one VS Code cannot decode (MPEG-4 Part 2, MPEG-2, VC-1), convert to H.264 instead. The result then has
+ * mode 'transcode', remuxFailed or videoCodec, and the encoder.
+ */
+function runRemux(opts) {
+  let current = runOnce(opts);
+  let cancelled = false;
+  const promise = current.promise.then((r) => {
+    if (cancelled) return r;
+    const codec = inputVideoCodec(r.log);
+    if (r.ok && remuxPlayable(codec)) return { ...r, mode: 'remux', videoCodec: codec || '' };
+    if (!r.ok && /took longer than|^Stopped\.$/.test(r.error || '')) return r;
+    const next = run({ ...opts, mode: 'transcode' });
+    current = next;
+    return next.promise.then((r2) => ({ ...r2, mode: 'transcode', videoCodec: codec || '', remuxFailed: !r.ok, remuxError: r.ok ? undefined : r.error }));
   });
   return { promise, cancel: () => { cancelled = true; current.cancel(); } };
 }
@@ -133,7 +174,7 @@ function runOnce({ helper, input, output, mode, duration, timeoutMs = 600000, on
       clearTimeout(timer);
       if (code === 0 && !killed && isFile(tmp)) {
         try { fs.renameSync(tmp, output); } catch (e) { resolve({ ok: false, error: String(e.message) }); return; }
-        resolve({ ok: true, output, ms: Date.now() - t0 });
+        resolve({ ok: true, output, ms: Date.now() - t0, log: err.slice(0, 4000) });
         return;
       }
       try { fs.unlinkSync(tmp); } catch { /* not there */ }
@@ -159,4 +200,4 @@ function pruneCache(dir, maxBytes, keep = new Set()) {
   return removed;
 }
 
-module.exports = { which, findHelper, buildArgs, encoderArgs, fallbackEncoder, parseProgress, parseDuration, cacheKey, run, pruneCache, ffmpegInput, AFCONVERT };
+module.exports = { which, findHelper, buildArgs, inputVideoCodec, remuxPlayable, encoderArgs, fallbackEncoder, parseProgress, parseDuration, cacheKey, run, pruneCache, ffmpegInput, AFCONVERT };

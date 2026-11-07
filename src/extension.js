@@ -112,12 +112,12 @@ class Provider {
       const key = decoder.cacheKey(uri.fsPath, state.stat, helper.tool, mode);
       const isVideo = mode === 'remux' || tc;
       const out = path.join(cacheDir, key + (isVideo ? '.mp4' : '.flac'));
-      const done = (file, ms, cached, encoder) => {
+      const done = (file, ms, cached, encoder, doneMode = mode) => {
         try { const now = new Date(); fs.utimesSync(file, now, now); } catch { /* ignore */ }
         const src = w.asWebviewUri(vscode.Uri.file(file)).toString();
-        if (tc) state.converted = true;
+        if (doneMode === 'transcode') state.converted = true;
         if (isVideo) post(toWebview.media(src));
-        post(toWebview.sound('ready', { src: isVideo ? null : src, tool: helper.tool, ms, cached, mode, encoder }));
+        post(toWebview.sound('ready', { src: isVideo ? null : src, tool: helper.tool, ms, cached, mode: doneMode, encoder }));
       };
       if (fs.existsSync(out)) { done(out, 0, true); return; }
       post(toWebview.sound('decoding', { tool: helper.tool, progress: null, mode }));
@@ -128,7 +128,12 @@ class Provider {
       const r = await thisJob.promise;
       if (job === thisJob) job = null;
       if (my !== gen) return;
-      if (r.ok) { done(out, r.ms, false, r.encoder); decoder.pruneCache(cacheDir, c.cacheMB * 1048576, new Set([out])); }
+      if (r.ok && mode === 'remux' && r.mode === 'transcode') {
+        // The MKV or WebM held a video codec that MP4 or VS Code cannot take, so ffmpeg converted it to H.264.
+        state.plan = media.transcodePlan(r.videoCodec, false);
+        post(toWebview.plan(state.plan));
+      }
+      if (r.ok) { done(out, r.ms, false, r.encoder, r.mode === 'transcode' ? 'transcode' : mode); decoder.pruneCache(cacheDir, c.cacheMB * 1048576, new Set([out])); }
       else if (media.isNotMediaError(r.error) && !(state.meta && state.meta.ok)) post(toWebview.sound('error', { tool: helper.tool, mode, final: true, text: media.notVideoText(state.stat ? state.stat.size : null, helper.tool) }));
       else post(toWebview.sound('error', { tool: helper.tool, mode, text: helper.tool + (tc ? ' could not convert this video: ' : ' could not read this file: ') + r.error }));
     };

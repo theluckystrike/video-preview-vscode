@@ -1,4 +1,4 @@
-# MP4 & MOV Viewer, Video Player with Sound
+# MP4, MOV & MKV Viewer, Video Player with Sound
 
 [![VS Code Marketplace installs](https://img.shields.io/visual-studio-marketplace/i/zovo.video-preview-with-sound?label=VS%20Code%20installs)](https://marketplace.visualstudio.com/items?itemName=zovo.video-preview-with-sound)
 [![Open VSX version](https://img.shields.io/open-vsx/v/zovo/video-preview-with-sound?label=Open%20VSX)](https://open-vsx.org/extension/zovo/video-preview-with-sound)
@@ -22,7 +22,7 @@ Version 0.2.0 adds three things. Videos VS Code can't decode, such as Apple ProR
 
 ![The same 20-second video opened again: the toast says "Resumed at 0:14. Home goes to the start."](https://github.com/theluckystrike/video-preview-vscode/raw/HEAD/images/resume.png)
 
-- It opens files VS Code can't open at all. VS Code's player has no MKV or WebM support. With ffmpeg installed, the video stream is copied into MP4 without re-encoding (0.1 s for our samples) and plays with sound.
+- It opens MKV and WebM, which VS Code can't open at all. This needs ffmpeg on every system. The video stream is copied into MP4 without re-encoding (0.1 s for our samples) and plays with sound. MKV files with VP8, MPEG-4 Part 2 or MPEG-2 video are converted to H.264 instead.
 
 ## Quick start
 
@@ -39,7 +39,7 @@ VS Code's built-in Chromium ships with the H.264 video decoder but without AAC. 
 |---|---|---|
 | H.264, HEVC or VP9 video with MP3 or FLAC sound | VS Code plays it directly | none |
 | AAC, AC-3, E-AC-3, Opus or ALAC sound in MP4, M4V or MOV | the sound is decoded to FLAC and plays next to the muted video | afconvert (macOS) or ffmpeg |
-| MKV or WebM | video copied into MP4, sound converted to FLAC, one file | ffmpeg |
+| MKV or WebM | video copied into MP4, sound converted to FLAC, one file. VP8, Theora, MPEG-4 Part 2 or MPEG-2 video is converted to H.264 | ffmpeg |
 | no audio track | plays, and the chip says "No audio track" | none |
 | ProRes, MPEG-4 Part 2, DNxHD or other video VS Code can't decode, and `.avi`, `.wmv`, `.flv`, `.mpg`, `.mpeg`, `.ogv`, `.m2ts` | converted to H.264 (libx264, or VideoToolbox or Media Foundation if your ffmpeg has no libx264), sound to FLAC | ffmpeg |
 
@@ -95,7 +95,8 @@ The extension makes no network calls and has no telemetry. The webview runs unde
 - Big files stream from disk and the picture starts at once, but the sound has to be decoded first. For a 1-hour AAC track that took 5.7 s with ffmpeg and 17.8 s with afconvert on an M-series Mac. The video plays muted until the chip says "Sound: on".
 - FLAC is large. That 1-hour track became about 370 MB in the cache, so the 2 GB default holds roughly five hours of sound.
 - The separate sound track is nudged when it drifts more than 0.04 s from the picture and moved back when it drifts more than 0.25 s. MKV and WebM stay tighter, because they play as one remuxed file.
-- MKV and WebM with VP8 or Theora video can't be copied into MP4. You'll get the ffmpeg error message instead.
+- MKV and WebM with VP8, Theora, MPEG-4 Part 2 or MPEG-2 video can't play as a copy, so they are converted to H.264. On a long file that takes a while, like any conversion.
+- Without ffmpeg, MKV and WebM don't open. The player says "Install ffmpeg to open this file" and offers Settings and Open in default app.
 - HEVC needs hardware decoding, which macOS has. AV1 depends on your GPU.
 - Remote and virtual workspaces play the video, but the helper only runs on local files.
 - Converting needs your own ffmpeg; macOS afconvert can't convert video. Without ffmpeg the player says so and offers "Settings" and "Open in default app". Real footage converts slower than our test clip, and a long ProRes file can take minutes. The converted copy counts toward `videoPreview.cacheSizeMB`, and `maxDecodeSizeMB` and `helperTimeoutSeconds` apply to it too.

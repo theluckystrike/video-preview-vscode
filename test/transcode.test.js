@@ -17,7 +17,7 @@ test('transcode args: map, libx264 veryfast crf 20, even size, FLAC, faststart, 
   assert.strictEqual(a[a.indexOf('-i') + 1], 'file:/v/-evil|concat:x.mov');
   assert.strictEqual(a[a.length - 1], 'file:/c/o.mp4');
   const seq = a.join(' ');
-  assert.ok(seq.includes('-map 0:v:0 -map 0:a:0? -sn -dn -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p -vf scale=trunc(iw/2)*2:trunc(ih/2)*2 -c:a flac -strict -2 -movflags +faststart -f mp4'), seq);
+  assert.ok(seq.includes('-map 0:v:0? -map 0:a:0? -sn -dn -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p -vf scale=trunc(iw/2)*2:trunc(ih/2)*2 -c:a flac -strict -2 -movflags +faststart -f mp4'), seq);
   assert.ok(seq.includes('-progress pipe:1 -nostats'));
   assert.ok(a.includes('-nostdin'));
   assert.ok(a.every((x) => typeof x === 'string'));

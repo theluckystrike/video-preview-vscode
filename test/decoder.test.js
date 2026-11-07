@@ -103,3 +103,63 @@ test('run: macOS afconvert turns AAC into FLAC', { skip: !(process.platform === 
   assert.ok(r.ok, r.error);
   assert.strictEqual(fs.readFileSync(flac).subarray(0, 4).toString(), 'fLaC');
 });
+
+test('inputVideoCodec reads the input video codec from the ffmpeg log, not the output (SQL2)', () => {
+  const log = `Input #0, matroska,webm, from 'file:/x/a.mkv':
+  Duration: 00:00:06.00, start: 0.000000, bitrate: 1964 kb/s
+  Stream #0:0: Video: mpeg4 (Simple Profile), yuv420p, 640x360 [SAR 1:1 DAR 16:9], 30 fps, 30 tbr, 1k tbn (default)
+  Stream #0:1: Audio: mp3 (mp3float), 48000 Hz, mono, fltp (default)
+Stream mapping:
+  Stream #0:0 -> #0:0 (copy)
+Output #0, mp4, to 'file:/c/o.mp4':
+  Stream #0:0: Video: h264 (avc1 / 0x31637661), yuv420p, 640x360`;
+  assert.strictEqual(d.inputVideoCodec(log), 'mpeg4');
+  assert.strictEqual(d.inputVideoCodec("Input #0, matroska,webm, from 'a.mkv':\n  Stream #0:0(eng): Video: vp8, yuv420p(tv, bt709/unknown/unknown, progressive), 640x360"), 'vp8');
+  assert.strictEqual(d.inputVideoCodec("Input #0, matroska,webm, from 'a.mka':\n  Stream #0:0: Audio: opus, 48000 Hz, mono, fltp"), '');
+  assert.strictEqual(d.inputVideoCodec(''), null);
+  assert.strictEqual(d.inputVideoCodec(undefined), null);
+});
+
+test('remuxPlayable: H.264, HEVC, VP9, AV1 and audio-only copy; MPEG-4 Part 2, VP8, MPEG-2 convert (SQL2)', () => {
+  for (const c of ['h264', 'hevc', 'vp9', 'av1', '', null, undefined]) assert.strictEqual(d.remuxPlayable(c), true, String(c));
+  for (const c of ['mpeg4', 'vp8', 'mpeg2video', 'theora', 'vc1', 'msmpeg4v3']) assert.strictEqual(d.remuxPlayable(c), false, c);
+});
+
+test('remux and transcode map the video track as optional, so an audio-only MKV still converts (SQL2)', () => {
+  for (const mode of ['remux', 'transcode']) {
+    const a = d.buildArgs('ffmpeg', '/x/a.mkv', '/c/o.mp4', mode);
+    assert.strictEqual(a[a.indexOf('-map') + 1], '0:v:0?', mode);
+    assert.strictEqual(a[a.indexOf('-loglevel') + 1], 'info', mode);
+  }
+});
+
+test('run remux: VP8 and MPEG-4 Part 2 MKV are converted to H.264, H.264 MKV is copied (SQL2)', { skip: !hasFfmpeg() && 'no ffmpeg' }, async () => {
+  const { execFileSync } = require('child_process');
+  const helper = d.findHelper({ preferred: 'ffmpeg', needFfmpeg: true });
+  const make = (name, vcodec) => {
+    const p = path.join(tmp, name);
+    execFileSync(helper.path, ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=15:duration=1', '-f', 'lavfi', '-i', 'sine=duration=1',
+      '-c:v', vcodec, '-c:a', 'libopus', '-shortest', p]);
+    return p;
+  };
+  // ffmpeg -i with no output exits 1 after printing the input streams to stderr.
+  const vcodecOut = (p) => d.inputVideoCodec(require('child_process').spawnSync(helper.path, ['-hide_banner', '-i', p], { encoding: 'utf8' }).stderr);
+  const vp8 = make('vp8.mkv', 'libvpx');
+  const r1 = await d.run({ helper, input: vp8, output: path.join(tmp, 'vp8.mp4'), mode: 'remux' }).promise;
+  assert.ok(r1.ok, r1.error);
+  assert.strictEqual(r1.mode, 'transcode');
+  assert.strictEqual(r1.videoCodec, 'vp8');
+  assert.strictEqual(r1.remuxFailed, true);
+  assert.strictEqual(vcodecOut(path.join(tmp, 'vp8.mp4')), 'h264');
+  const m4 = make('m4.mkv', 'mpeg4');
+  const r2 = await d.run({ helper, input: m4, output: path.join(tmp, 'm4.mp4'), mode: 'remux' }).promise;
+  assert.ok(r2.ok, r2.error);
+  assert.strictEqual(r2.mode, 'transcode');
+  assert.strictEqual(r2.videoCodec, 'mpeg4');
+  assert.strictEqual(r2.remuxFailed, false);
+  assert.strictEqual(vcodecOut(path.join(tmp, 'm4.mp4')), 'h264');
+  const r3 = await d.run({ helper, input: fx('clip-h264-aac.mkv'), output: path.join(tmp, 'h.mp4'), mode: 'remux' }).promise;
+  assert.ok(r3.ok, r3.error);
+  assert.strictEqual(r3.mode, 'remux');
+  assert.strictEqual(r3.videoCodec, 'h264');
+});
