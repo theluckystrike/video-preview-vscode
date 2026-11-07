@@ -83,7 +83,7 @@ The metadata panel shows container brands, duration, codec, frame size, frame ra
 | `videoPreview.subtitles.autoLoad` | `true` | Load `.srt` and `.vtt` files with the same name as the video |
 | `videoPreview.rememberPosition` | `true` | Open each video where you stopped it, and keep the volume |
 | `videoPreview.autoplay` | `false` | Start playing as soon as a video opens |
-| `videoPreview.askForRating` | true | Ask one time for a Marketplace rating, after 5 files and 2 days. Turn it off with `false` |
+| `videoPreview.askForRating` | true | Ask for a Marketplace rating after 3 files opened without an error on 2 different days. "Later" asks one more time after 7 days, "No thanks" never again. It never asks after an error. Turn it off with `false`. |
 | `videoPreview.showSupportLinks` | true | Show the small Sponsor and More free viewers links under the player controls |
 
 ## Privacy and safety

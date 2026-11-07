@@ -12,7 +12,7 @@ const { createStore, resumeAt } = require('./core/resume');
 const { createRatingPrompt } = require('./rate');
 const { registerSupport, commandUris, showLinks } = require('./support');
 
-let rating = { success() {} };
+let rating = { success() {}, failure() {} };
 
 const VIEW_TYPE = 'videoPreview.player';
 
@@ -71,9 +71,16 @@ class Provider {
     });
 
     let job = null;
-    const post = (m) => { w.postMessage(m).then(undefined, () => {}); };
-    const state = { meta: null, plan: null, stat: null };
     let counted = false; // one success per opened tab, for the rating prompt
+    const post = (m) => {
+      // Rating: a file counts once its picture and sound are ready; any error state blocks the ask.
+      if (m && m.type === 'sound') {
+        if (m.state === 'error') rating.failure();
+        else if (!counted && ['native', 'none', 'ready', 'off'].includes(m.state)) { counted = true; rating.success(); }
+      }
+      w.postMessage(m).then(undefined, () => {});
+    };
+    const state = { meta: null, plan: null, stat: null };
 
     let gen = 0; // bumped when a newer job replaces the running one, so the old result is dropped quietly
     const startSound = async (userAsked) => {
@@ -168,7 +175,6 @@ class Provider {
             const tracks = await findSidecars(uri.fsPath);
             if (tracks.length) post(toWebview.subtitles(tracks, { auto: !!c.autoSubs }));
           }
-          if (state.plan.mode !== 'unsupported' && !counted) { counted = true; rating.success(); }
           if (state.plan.mode === 'native') post(toWebview.sound('native'));
           else if (state.plan.mode === 'video-only') post(toWebview.sound('none'));
           else if (state.plan.mode === 'unsupported') post(toWebview.sound('error', { text: state.plan.reason }));
@@ -179,6 +185,7 @@ class Provider {
       } else if (m.type === 'enableSound' || m.type === 'retrySound' || m.type === 'convertVideo') {
         if (state.plan) await startSound(true);
       } else if (m.type === 'playFailed') {
+        rating.failure();
         // The player could not show the video (no decoder on this GPU, odd codec): convert once per tab.
         if (!state.plan) return;
         if (state.plan.mode === 'transcode') {
@@ -235,7 +242,7 @@ class Provider {
 
 function activate(ctx) {
   registerSupport({ vscode, context: ctx, prefix: 'videoPreview', selfId: 'zovo.video-preview-with-sound' });
-  rating = createRatingPrompt({ vscode, context: ctx, extensionId: 'zovo.video-preview-with-sound', section: 'videoPreview', message: (n) => `Video Preview has opened ${n} files for you. A rating helps other people find it.` });
+  rating = createRatingPrompt({ vscode, context: ctx, extensionId: 'zovo.video-preview-with-sound', section: 'videoPreview', name: 'MP4, MOV & MKV Viewer' });
   const provider = new Provider(ctx);
   ctx.subscriptions.push(
     vscode.window.registerCustomEditorProvider(VIEW_TYPE, provider, { webviewOptions: { retainContextWhenHidden: false }, supportsMultipleEditorsPerDocument: true }),

@@ -6,6 +6,7 @@
 - MKV files with MPEG-4 Part 2 or MPEG-2 video now show the picture. Before, the video was copied into MP4 and played with sound but a black picture. ffmpeg's log names the codec, and these are converted to H.264.
 - An MKV or WebM with only an audio track no longer fails with "Stream map matches no streams".
 - The Marketplace name is now "MP4, MOV & MKV Viewer, Video Player with Sound". The extension ID, settings and commands stay the same. The README and description say that MKV, WebM and AVI need ffmpeg.
+- The rating question now comes after 3 files that opened without an error on 2 different days, and never after an error. "Later" asks one more time after 7 days, "No thanks" ends it, and it never asks more than 2 times. `videoPreview.askForRating: false` turns it off.
 
 ## 0.2.3 (2026-11-08)
 
