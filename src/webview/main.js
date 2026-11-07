@@ -137,7 +137,8 @@ video.addEventListener('seeked', tick);
 video.addEventListener('play', () => { if (S.audio && S.audio.paused) S.audio.play().catch(() => setChip('Sound ready: press Play')); tick(); });
 video.addEventListener('pause', () => { if (S.audio) S.audio.pause(); tick(); remember(true); });
 video.addEventListener('ended', () => remember(true));
-video.addEventListener('seeked', () => { if (!playing()) remember(false); });
+// While paused, save 300 ms after the last seek, so quick seeks before closing the tab are not lost to the 2 s limit.
+video.addEventListener('seeked', () => { if (!playing()) { clearTimeout(S.rememberT); S.rememberT = setTimeout(() => remember(true), 300); } });
 video.addEventListener('ratechange', () => { if (S.audio) S.audio.playbackRate = video.playbackRate; });
 video.addEventListener('waiting', () => { if (S.audio) S.audio.pause(); });
 video.addEventListener('playing', () => { if (S.audio && S.audio.paused) S.audio.play().catch(() => {}); });

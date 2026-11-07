@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 (2026-11-07)
+
+- New name in the Marketplace: MP4 Viewer & Video Player with Sound. The extension ID, settings and commands stay the same.
+- Video that VS Code can't decode (Apple ProRes, MPEG-4 Part 2, DNxHD and others) and `.avi`, `.wmv`, `.flv`, `.mpg`, `.mpeg`, `.ogv` and `.m2ts` files are converted to H.264 with your ffmpeg and play with sound. If a video shows no picture, the player converts it once by itself. Without ffmpeg, the player shows what is missing with "Settings" and "Open in default app". New setting `videoPreview.convertUnsupportedVideo`.
+- Subtitles: `.srt` and `.vtt` files next to the video load by themselves. The CC menu and the C key switch tracks or turn them off, and "Load subtitles..." opens any other file. New setting `videoPreview.subtitles.autoLoad`.
+- Each video opens where you stopped it, at the same speed, and the volume carries over. New setting `videoPreview.rememberPosition`.
+- New setting `videoPreview.autoplay` starts playback when a video opens. It is off by default.
+
 ## 0.1.6 (2026-11-07)
 
 - "More free viewers" now starts with the Zovo extensions most related to this one. Picking one opens its Marketplace page, where you choose to install it.
