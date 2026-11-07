@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2 (2026-11-07)
+
+- The Marketplace name is now "MP4 & MOV Viewer, Video Player with Sound" (it was "MP4 Viewer & Video Player with Sound"). The extension id, commands and settings stay the same.
+- The Marketplace description now starts with "MP4 viewer, MOV viewer and video player for VS Code that plays MP4, MOV, MKV, WebM and AVI with the sound VS Code mutes".
+- Marketplace keywords: added `mov viewer`.
+
 ## 0.2.1 (2026-11-07)
 
 - An empty file (0 bytes) or a file that is not a video now gets a short, clear message. Before, the player showed ffmpeg's raw error output and a Retry button that could not help.

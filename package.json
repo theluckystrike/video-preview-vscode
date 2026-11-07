@@ -1,8 +1,8 @@
 {
   "name": "video-preview-with-sound",
-  "displayName": "MP4 Viewer & Video Player with Sound",
-  "description": "MP4 viewer and video player for VS Code that plays MP4, MOV, MKV, WebM and AVI with the sound VS Code mutes. Converts ProRes and other codecs VS Code cannot play, shows .srt and .vtt subtitles and remembers where you stopped.",
-  "version": "0.2.1",
+  "displayName": "MP4 & MOV Viewer, Video Player with Sound",
+  "description": "MP4 viewer, MOV viewer and video player for VS Code that plays MP4, MOV, MKV, WebM and AVI with the sound VS Code mutes. Converts ProRes and other codecs VS Code cannot play, shows .srt and .vtt subtitles and remembers where you stopped.",
+  "version": "0.2.2",
   "publisher": "zovo",
   "license": "MIT",
   "icon": "icon.png",
@@ -20,11 +20,12 @@
   ],
   "keywords": [
     "mp4 viewer",
+    "mov viewer",
     "video player",
     "video preview",
     "mp4 player",
-    "video viewer",
     "mov player",
+    "video viewer",
     "video sound",
     "mp4",
     "mov",
@@ -46,7 +47,6 @@
     "screen recording",
     "codec",
     "ffmpeg",
-    "speed",
     "offline",
     "video"
   ],
