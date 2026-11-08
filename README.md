@@ -1,4 +1,4 @@
-# MP4, MOV & MKV Viewer, Video Player with Sound
+# MP4, MOV, MKV & WebM Viewer, Video Player & Preview with Sound
 
 [![VS Code Marketplace installs](https://img.shields.io/visual-studio-marketplace/i/zovo.video-preview-with-sound?label=VS%20Code%20installs)](https://marketplace.visualstudio.com/items?itemName=zovo.video-preview-with-sound)
 [![Open VSX version](https://img.shields.io/open-vsx/v/zovo/video-preview-with-sound?label=Open%20VSX)](https://open-vsx.org/extension/zovo/video-preview-with-sound)

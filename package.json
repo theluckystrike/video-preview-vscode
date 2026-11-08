@@ -1,8 +1,8 @@
 {
   "name": "video-preview-with-sound",
-  "displayName": "MP4, MOV & MKV Viewer, Video Player with Sound",
-  "description": "MP4 viewer, MOV viewer and video player for VS Code that plays MP4, MOV, MKV, WebM and AVI with the sound VS Code mutes. AAC sound in MP4 and MOV plays with no install (built-in decoder); MKV, WebM and AVI need ffmpeg. Picture-in-picture, .srt and .vtt subtitles, frame steps, and it remembers where you stopped.",
-  "version": "0.2.5",
+  "displayName": "MP4, MOV, MKV & WebM Viewer, Video Player & Preview with Sound",
+  "description": "Free. Subtitles, picture-in-picture, frame steps. MP4 viewer, MOV viewer and video player for VS Code that plays MP4, MOV, MKV, WebM and AVI with the sound VS Code mutes. AAC sound in MP4 and MOV plays with no install (built-in decoder); MKV, WebM and AVI need ffmpeg. Supports .srt and .vtt subtitles, and it remembers where you stopped.",
+  "version": "0.2.6",
   "publisher": "zovo",
   "license": "MIT",
   "icon": "icon.png",

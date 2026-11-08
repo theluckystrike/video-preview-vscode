@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.6 (2026-11-08)
+
+- The Marketplace name is now "MP4, MOV, MKV & WebM Viewer, Video Player & Preview with Sound" (was "MP4, MOV & MKV Viewer, Video Player with Sound"), so more searches find it. The extension ID, settings and commands stay the same.
+- The short description now starts with what the name does not say: free, with subtitles, picture-in-picture and frame steps.
+- No change to how files open or look.
+
 ## 0.2.5 (2026-11-08)
 
 - AAC sound in MP4, MOV and M4V files now plays with nothing to install, on Windows, Linux and macOS. The extension carries a built-in decoder (Symphonia compiled to WebAssembly, about 820 KB). It runs in a worker thread, starts no program and makes no network request. ALAC, MP3 and PCM sound work too. ffmpeg or afconvert is still used first if found. If either fails, the built-in decoder takes over. New choice `builtin` for `videoPreview.soundHelper`.
