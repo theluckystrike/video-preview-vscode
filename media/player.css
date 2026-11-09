@@ -46,3 +46,6 @@ body { margin: 0; padding: 0; font-family: var(--vscode-font-family); font-size:
 .captions { position: absolute; left: 5%; right: 5%; bottom: 6%; display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; font-family: var(--vscode-font-family); font-size: max(16px, calc(var(--vscode-font-size, 13px) * 1.6)); line-height: 1.3; }
 .capline { color: #fff; background: rgba(0, 0, 0, .55); padding: 1px 8px; border-radius: 3px; text-align: center; white-space: pre-wrap; text-shadow: 0 0 3px #000, 0 1px 2px #000, 0 0 1px #000; }
 .cc.on { border-color: var(--vscode-focusBorder); }
+/* Zovo Pro tools (lane PRO4) */
+.pro-badge { font-size: 9px; font-weight: 700; letter-spacing: .05em; padding: 0 4px; margin-left: 2px; border-radius: 3px; line-height: 14px; background: var(--vscode-badge-background, #4d4d4d); color: var(--vscode-badge-foreground, #fff); vertical-align: 1px; }
+.pro-badge.hidden { display: none; }

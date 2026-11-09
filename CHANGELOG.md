@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 (2026-11-09)
+
+- New, optional Zovo Pro tools, each with 3 free tries on your computer. They work on the A-B part, or the whole video:
+  - Clip export: a GIF (480 to 960 px, made inside the player, no other tool needed) or an MP4 cut by your ffmpeg, exact (H.264 and AAC) or a fast copy.
+  - Frame export: every frame, every 5th or 10th, one per second, or 10 evenly spaced, as full-size PNG files named with the time and frame number, up to 1,000 per export.
+  - Contact sheet: one PNG with 16, 30 or 48 frames in a grid, each with its time and frame number, and a header with the file facts.
+- A try is used only when a file is saved. Esc stops an export and the player goes back to where you were.
+- Everything that was free stays free: playback with sound, MKV, WebM and AVI through ffmpeg, frame steps, speed, the A-B loop, subtitles, picture-in-picture, metadata and Save frame. Nothing about Pro shows when a video opens. `videoPreview.showProFeatures: false` hides the Pro tools.
+- Zovo Pro is USD 19 once for every Zovo viewer: GitHub Sponsors, or PayPal for a license key. New commands: Get Zovo Pro, Unlock Zovo Pro with GitHub Sponsors, Enter Zovo Pro License Key, Remove Zovo Pro from This Editor.
+- The rating question now counts 2 videos in 2 sessions at least 4 hours apart, also in a window that stays open, and "Rate it" opens Open VSX in Cursor, Windsurf and VSCodium. Rate comes first in the footer.
+- "More free viewers" starts with the Zovo extensions most related to this one. The README names the custom format work offer.
+
 ## 0.2.6 (2026-11-08)
 
 - The Marketplace name is now "MP4, MOV, MKV & WebM Viewer, Video Player & Preview with Sound" (was "MP4, MOV & MKV Viewer, Video Player with Sound"), so more searches find it. The extension ID, settings and commands stay the same.

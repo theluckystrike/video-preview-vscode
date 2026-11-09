@@ -4,6 +4,7 @@ const { syncAction, loopTarget, stepFrame, frameNumber, formatTime, formatBytes,
 const { codecName } = require('../core/media-names');
 const { cuesAt } = require('../core/subtitles');
 const { resumeAt } = require('../core/resume-rule');
+const { setupPro } = require('./pro');
 
 const vscode = acquireVsCodeApi();
 const saved = vscode.getState() || {};
@@ -56,8 +57,10 @@ const toast = el('div', { class: 'toast hidden', role: 'status' });
 const info = el('aside', { class: 'info hidden' });
 const msg = el('div', { class: 'msg hidden' });
 
+// Zovo Pro tools (src/webview/pro.js): Clip, Frames and Sheet buttons; hidden until the host sends the Pro state.
+const pro = setupPro({ el, vscode, video, get S() { return S; }, toast: (t) => showToast(t), showMsg: (t) => showMsg(t), play: () => { if (!playing()) togglePlay(); } });
 const bar1 = el('div', { class: 'bar' }, playBtn, timeEl, frameEl, seekWrap);
-const bar2 = el('div', { class: 'bar' }, prevF, nextF, speedSel, aBtn, bBtn, loopBtn, el('span', { class: 'sep' }), muteBtn, vol, ccSel, shotBtn, pipBtn, infoBtn, el('span', { class: 'grow' }), soundChip, soundAction);
+const bar2 = el('div', { class: 'bar' }, prevF, nextF, speedSel, aBtn, bBtn, loopBtn, el('span', { class: 'sep' }), muteBtn, vol, ccSel, shotBtn, ...pro.buttons, pipBtn, infoBtn, el('span', { class: 'grow' }), soundChip, soundAction);
 app.replaceChildren(el('div', { class: 'player' }, el('div', { class: 'main' }, stage, msg, bar1, bar2), info), toast);
 
 function showToast(t) { toast.textContent = t; toast.classList.remove('hidden'); clearTimeout(showToast.t); showToast.t = setTimeout(() => toast.classList.add('hidden'), 2200); }
@@ -140,7 +143,7 @@ function tick() {
   if (S.duration && document.activeElement !== seek) seek.value = String(Math.round((t / S.duration) * 1000));
   playBtn.textContent = playing() ? 'Pause' : 'Play';
   playBtn.setAttribute('aria-label', playBtn.textContent);
-  if (S.loop) { const to = loopTarget(t, S.a, S.b); if (to != null) seekTo(to); }
+  if (S.loop && !pro.busy()) { const to = loopTarget(t, S.a, S.b); if (to != null) seekTo(to); }
   drawCaptions();
   if (playing()) remember(false);
   if (Math.abs(t - (saved.t || 0)) > 0.5 || video.paused) { saved.t = t; vscode.setState({ t, rate: video.playbackRate, a: S.a, b: S.b, loop: S.loop }); }
@@ -269,6 +272,7 @@ setInterval(() => {
 }, 200);
 
 document.addEventListener('keydown', (e) => {
+  if (pro.busy()) return; // an export drives the player; Esc stops it (src/webview/pro.js)
   if (e.target && (e.target.tagName === 'SELECT' || (e.target.tagName === 'INPUT' && e.target.type !== 'range'))) return;
   const k = e.key;
   const handled = {
@@ -425,7 +429,7 @@ function e2eReport() {
   vscode.postMessage({ type: 'stats', stats: { ...(S.stats || {}), sound: S.sound, tool: S.soundInfo.tool || null, playing: playing(), t: video.currentTime,
     audioT: S.audio ? S.audio.currentTime : null, drift: S.audio ? S.audio.currentTime - video.currentTime : null, videoMuted: video.muted,
     w: video.videoWidth, h: video.videoHeight, vBytes: video.webkitVideoDecodedByteCount, aBytes: S.audio ? S.audio.webkitAudioDecodedByteCount : video.webkitAudioDecodedByteCount,
-    rate: video.playbackRate, pip: !!document.pictureInPictureElement, audioRate: S.audio ? S.audio.playbackRate : null, loop: S.loop, a: S.a, b: S.b, frame: frameNumber(video.currentTime, S.fps), chip: soundChip.textContent, msg: msg.textContent } });
+    rate: video.playbackRate, pip: !!document.pictureInPictureElement, pro: pro.probe(), audioRate: S.audio ? S.audio.playbackRate : null, loop: S.loop, a: S.a, b: S.b, frame: frameNumber(video.currentTime, S.fps), chip: soundChip.textContent, msg: msg.textContent } });
 }
 
 window.addEventListener('message', (ev) => {
@@ -433,6 +437,7 @@ window.addEventListener('message', (ev) => {
   if (!m || typeof m !== 'object') return;
   if (m.type === 'init') {
     S.init = m;
+    if (m.pro) pro.onMessage({ type: 'pro', ...m.pro });
     const v = m.meta && m.meta.ok ? m.meta.tracks.find((t) => t.type === 'video') : null;
     if (v && v.fps) S.fps = v.fps;
     if (m.meta && m.meta.ok) S.duration = m.meta.duration;
@@ -452,6 +457,7 @@ window.addEventListener('message', (ev) => {
     if (m.add && n) showToast('Subtitles loaded: ' + S.tracks[S.tracks.length - 1].label);
   } else if (m.type === 'sound') onSound(m);
   else if (m.type === 'toast') showToast(m.text);
+  else if (pro.onMessage(m)) { /* Zovo Pro message */ }
 });
 
 vscode.postMessage({ type: 'ready' });

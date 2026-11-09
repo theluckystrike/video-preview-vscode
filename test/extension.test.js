@@ -24,6 +24,7 @@ const vscodeMock = {
     get isTrusted() { return state.trusted; },
     fs: { writeFile: async (u, b) => { state.written.push([u.fsPath, b]); } },
     workspaceFolders: [],
+    onDidChangeConfiguration: () => ({ dispose() {} }),
   },
   window: { registerCustomEditorProvider: () => ({ dispose() {} }), showSaveDialog: async () => state.saveTarget, showOpenDialog: async () => state.openPick, showInformationMessage: () => {} },
   commands: { registerCommand: () => ({ dispose() {} }), executeCommand: async () => {} },
